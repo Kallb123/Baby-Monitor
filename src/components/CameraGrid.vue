@@ -2,33 +2,44 @@
 import { computed, useTemplateRef } from 'vue'
 
 import type { EntityState } from '@shared/api.ts'
-import type { Camera, Layout } from '@shared/config.ts'
+import type { Camera, LayoutMode } from '@shared/config.ts'
 import { useElementSize } from '@/composables/useElementSize'
 import { bestGrid } from '@/lib/layout'
 import CameraTile from './CameraTile.vue'
 
 const props = defineProps<{
   cameras: Camera[]
-  layout: Layout
+  mode: LayoutMode
+  focusCameraId: string | undefined
   states: Record<string, EntityState>
   audioCameraId: string | undefined
+  editing: boolean
 }>()
 
 const emit = defineEmits<{
-  toggleAudio: [cameraId: string]
+  audio: [cameraId: string, on: boolean]
+  edit: [cameraId: string]
 }>()
 
 const root = useTemplateRef<HTMLElement>('root')
 const { width, height } = useElementSize(root)
 
 const focusId = computed(() => {
-  if (props.layout.mode !== 'focus' || props.cameras.length < 2) return undefined
-  const preferred = props.cameras.find((c) => c.id === props.layout.focusCameraId)
+  if (props.mode !== 'focus' || props.cameras.length < 2) return undefined
+  const preferred = props.cameras.find((c) => c.id === props.focusCameraId)
   return (preferred ?? props.cameras[0])?.id
 })
 
 const gridStyle = computed(() => {
-  if (focusId.value) return { '--thumbnails': props.cameras.length - 1 }
+  if (focusId.value) {
+    const thumbnails = props.cameras.length - 1
+    // One thumbnail gets a wider strip so it doesn't read as an afterthought.
+    return {
+      '--thumbnails': thumbnails,
+      '--strip-landscape': thumbnails === 1 ? '34%' : '26%',
+      '--strip-portrait': thumbnails === 1 ? '32%' : '22%',
+    }
+  }
   const { columns, rows } = bestGrid(props.cameras.length, width.value, height.value)
   return {
     gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -46,7 +57,11 @@ const gridStyle = computed(() => {
       :camera="camera"
       :states="states"
       :audio-active="camera.id === audioCameraId"
-      @toggle-audio="emit('toggleAudio', camera.id)"
+      :compact="!!focusId && camera.id !== focusId"
+      :listen-on-tap="!!focusId && camera.id !== focusId"
+      :editing="editing"
+      @audio="(on) => emit('audio', camera.id, on)"
+      @edit="emit('edit', camera.id)"
     />
   </div>
 </template>
@@ -54,7 +69,7 @@ const gridStyle = computed(() => {
 <style scoped>
 .camera-grid {
   display: grid;
-  gap: var(--gap);
+  gap: 14px;
   width: 100%;
   height: 100%;
 }
@@ -62,7 +77,7 @@ const gridStyle = computed(() => {
 /* Focus layout: one large tile plus a strip of thumbnails. The strip sits
    beside the main tile in landscape and below it in portrait. */
 .camera-grid.focus {
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--strip-landscape));
   grid-template-rows: repeat(var(--thumbnails), minmax(0, 1fr));
 }
 
@@ -74,7 +89,7 @@ const gridStyle = computed(() => {
 @media (orientation: portrait) {
   .camera-grid.focus {
     grid-template-columns: repeat(var(--thumbnails), minmax(0, 1fr));
-    grid-template-rows: minmax(0, 3fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, var(--strip-portrait));
   }
 
   .camera-grid.focus .main {

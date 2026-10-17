@@ -7,15 +7,16 @@ const props = withDefaults(
     level: number
     segments?: number
   }>(),
-  { segments: 10 },
+  { segments: 12 },
 )
 
 const lit = computed(() => Math.round(Math.min(1, Math.max(0, props.level)) * props.segments))
 
+// Sage for room sound, pale sage for raised sound, terracotta for loud.
 function tone(index: number): 'low' | 'mid' | 'high' {
-  const fraction = index / props.segments
-  if (fraction >= 0.8) return 'high'
-  if (fraction >= 0.5) return 'mid'
+  const fraction = (index - 1) / props.segments
+  if (fraction >= 2 / 3) return 'high'
+  if (fraction >= 5 / 12) return 'mid'
   return 'low'
 }
 </script>
@@ -41,28 +42,33 @@ function tone(index: number): 'low' | 'mid' | 'high' {
 <style scoped>
 .level-meter {
   display: flex;
-  flex-direction: column-reverse;
-  gap: 2px;
-  width: 8px;
-  height: 64px;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
 }
 
 .segment {
   flex: 1;
-  border-radius: 1px;
-  background: rgb(255 255 255 / 15%);
+  border-radius: var(--radius-pill);
+  background: rgb(238 231 219 / 14%);
   transition: background-color 80ms linear;
 }
 
 .segment.lit.low {
-  background: var(--meter-low);
+  background: var(--color-accent-2-500);
 }
 
 .segment.lit.mid {
-  background: var(--meter-mid);
+  background: var(--color-accent-2-300);
 }
 
 .segment.lit.high {
-  background: var(--meter-high);
+  background: var(--color-accent-400);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    transition: none;
+  }
 }
 </style>

@@ -1,26 +1,64 @@
+/*
+ * Design tokens from the "Organic" design system, tuned for a dark nursery:
+ * warm near-black ground, sand text, terracotta accent and sage second accent.
+ * Each role has a 100–900 tonal ramp; components take colours from the ramps.
+ */
 :root {
-  --bg: #0b0d12;
-  --surface: #161a22;
-  --border: #2a303c;
-  --text: #e8ecf3;
-  --text-muted: #9aa3b2;
-  --accent: #4da3ff;
-  --alert: #ff4d4f;
-  --meter-low: #3ddc84;
-  --meter-mid: #ffc53d;
-  --meter-high: #ff4d4f;
-  --radius: 10px;
-  --gap: 6px;
+  --color-neutral-100: #f9f4ed;
+  --color-neutral-200: #eee7db;
+  --color-neutral-300: #dcd3c4;
+  --color-neutral-400: #c0b6a5;
+  --color-neutral-500: #a19786;
+  --color-neutral-600: #82796a;
+  --color-neutral-700: #645c50;
+  --color-neutral-800: #474238;
+  --color-neutral-900: #2e2b25;
+
+  --color-accent-100: #fff2eb;
+  --color-accent-200: #ffe1d0;
+  --color-accent-300: #ffc6a5;
+  --color-accent-400: #f6a06b;
+  --color-accent-500: #d67f48;
+  --color-accent-600: #b2622d;
+  --color-accent-700: #8c491a;
+  --color-accent-800: #643312;
+  --color-accent-900: #402310;
+
+  --color-accent-2-100: #f0fae1;
+  --color-accent-2-200: #e1eecc;
+  --color-accent-2-300: #ccdbb2;
+  --color-accent-2-400: #aebf92;
+  --color-accent-2-500: #8fa073;
+  --color-accent-2-600: #728157;
+  --color-accent-2-700: #56633f;
+  --color-accent-2-800: #3d472b;
+  --color-accent-2-900: #272e1b;
+
+  --color-bg: #1c1a16;
+  --color-surface: var(--color-neutral-900);
+  --color-tile: #24221d;
+  --color-text: var(--color-neutral-200);
+  --color-text-strong: var(--color-neutral-100);
+  --color-text-muted: var(--color-neutral-400);
+  --color-ink: #201e1d;
+  --color-accent: #c67139;
+  --color-divider: var(--color-neutral-800);
+  --color-scrim: rgb(20 18 15 / 70%);
+
+  --font-heading: 'Caprasimo', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, sans-serif;
+
+  --radius-pill: 999px;
+  --radius-tile: 32px;
+  --radius-tile-compact: 22px;
+  --radius-card: 32px;
+
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 50%);
 
   color-scheme: dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  color: var(--text);
-  background: var(--bg);
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
 *,
@@ -40,59 +78,90 @@ body {
   /* Full-bleed on notched phones; components add safe-area padding where needed. */
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--color-bg);
   overscroll-behavior: none;
-}
-
-h1,
-h2 {
-  margin: 0;
-}
-
-input,
-select,
-button {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,
-.button {
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
   cursor: pointer;
-  text-decoration: none;
-  color: var(--text);
 }
 
-.button,
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #001224;
-  font-weight: 600;
-  padding: 10px 16px;
-  border-radius: 8px;
+:focus {
+  outline: none;
 }
 
-button.danger {
-  align-self: flex-start;
-  border-color: var(--alert);
-  color: var(--alert);
+:focus-visible {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(198 113 57 / 30%);
+}
+
+/* Pill buttons shared by the header, empty state and dialog. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
   background: transparent;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  white-space: nowrap;
 }
 
-.notice {
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 60%);
-  color: var(--text-muted);
-  font-size: 0.85rem;
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.notice.error {
-  color: var(--alert);
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: var(--color-accent-500);
+}
+
+.btn-primary:not(:disabled):active {
+  background: var(--color-accent-400);
+}
+
+.btn-secondary {
+  border-color: var(--color-divider);
+  color: var(--color-text);
+}
+
+.btn-secondary:hover {
+  background: rgb(238 231 219 / 7%);
+}
+
+.btn-secondary:active {
+  background: rgb(238 231 219 / 14%);
+}
+
+.btn-ghost {
+  padding: 0 18px;
+  color: var(--color-accent-400);
+}
+
+.btn-ghost:hover {
+  background: rgb(214 127 72 / 14%);
+}
+
+.btn-ghost:active {
+  background: rgb(214 127 72 / 22%);
 }

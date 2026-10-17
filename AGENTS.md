@@ -42,7 +42,13 @@ Data flow:
   (`src/composables/useEntityStates.ts`).
 - **Layout**: `src/lib/layout.ts` picks the grid shape that maximises tile area
   for the container size, so orientation is handled without special cases.
-  The `focus` layout uses CSS orientation media queries.
+  The `focus` layout uses CSS orientation media queries. The layout mode and
+  focused camera are per device (`localStorage`, via `useMonitorStore`), with
+  the config's `layout` as the default. Don't save them to the server: every
+  config save re-registers all streams with go2rtc.
+- **Editing**: there is no settings page. The header's **+** and **Edit**
+  open `CameraDialog.vue`, which validates with the shared schema and saves
+  the whole config through the config store.
 
 ### API
 
@@ -89,7 +95,11 @@ Run `npm run check` before you commit. CI runs the same plus a build.
 - **Resources**: anything that opens a connection, node, timer, observer or
   animation frame must release it in `onScopeDispose`/`onUnmounted`.
 - **Styling**: scoped CSS, design tokens as CSS custom properties in
-  `src/assets/main.css`. Dark theme by default (it's used in a dark nursery).
+  `src/assets/main.css`, taken from the "Organic" design system (Caprasimo
+  headings over Figtree, self-hosted via `@fontsource`; terracotta accent,
+  sage second accent; pill buttons, heavily rounded tiles; Lucide icons at
+  stroke 2.75 in `AppIcon.vue`). Use the ramp tokens rather than new hex
+  values. Dark theme by default (it's used in a dark nursery).
   Respect safe-area insets and `prefers-reduced-motion`.
 - **Tests**: `*.spec.ts` in a `__tests__/` folder next to the code. Server
   routes are tested with `app.inject()` and injected `fetch` fakes; never call
