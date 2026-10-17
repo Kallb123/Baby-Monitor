@@ -59,8 +59,14 @@ monitor.
 
 ```sh
 cp .env.example .env              # optional: set HA_URL and HA_TOKEN
-docker compose up -d --build
+docker compose up -d
 ```
+
+The app image is published to `ghcr.io/kallb123/baby-monitor` (amd64 and
+arm64) on every push to `main`, tagged `latest` and `sha-<commit>`. Update
+with `docker compose pull && docker compose up -d`. Set `BABY_MONITOR_TAG` in
+`.env` to pin a `sha-…` tag. Add `--build` to `up` to build the image from
+your checkout instead.
 
 Open `http://<host>:3000` on each device, then tap the gear icon to add
 cameras. Add it to the home screen for a full-screen experience.
@@ -80,10 +86,10 @@ list them in `COMPOSE_PROFILES` in `.env`. A `--profile` flag replaces the
 
 ```sh
 # Try it without hardware, then add a camera with RTSP URL rtsp://localhost:8654/demo
-docker compose --profile demo up -d --build
+docker compose --profile demo up -d
 
 # No existing Home Assistant? Run one alongside.
-docker compose --profile homeassistant up -d --build
+docker compose --profile homeassistant up -d
 ```
 
 With the bundled Home Assistant, finish onboarding at `http://<host>:8123`,

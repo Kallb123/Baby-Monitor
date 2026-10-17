@@ -154,6 +154,10 @@ commits and PR descriptions are written in normal prose.
   also writes those streams (with RTSP credentials) into its config file, which
   is why Compose keeps it in the `go2rtc-config` volume. Compose layers a fixed
   base config over that file so ports can't drift.
+- Every push to `main` builds the app image for amd64 and arm64 and pushes it
+  to `ghcr.io/kallb123/baby-monitor` (`.github/workflows/docker.yml`), tagged
+  `latest` and `sha-<commit>`. Compose uses that image and keeps `build: .`
+  so `up --build` still runs local changes.
 - `docker compose --profile demo` adds a fake H.264 + Opus camera at
   `rtsp://localhost:8654/demo` for end-to-end testing without hardware.
 - go2rtc does not transcode for WebRTC, and if the browser can't take the
