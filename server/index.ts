@@ -26,7 +26,8 @@ if (!homeAssistant) {
   app.log.warn('HA_URL / HA_TOKEN not set: temperature and cry detection are disabled')
 }
 
-// Re-register saved cameras on boot; go2rtc forgets API-added streams on restart.
+// Re-register saved cameras on boot as a backstop: go2rtc only keeps
+// API-added streams if its config file is writable and persisted.
 const config = await store.load()
 go2rtc.syncStreams(config.cameras).catch((error: unknown) => {
   app.log.warn({ err: error }, 'go2rtc stream sync failed on startup')

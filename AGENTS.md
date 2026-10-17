@@ -156,9 +156,11 @@ commits and PR descriptions are written in normal prose.
   base config over that file so ports can't drift.
 - `docker compose --profile demo` adds a fake H.264 + Opus camera at
   `rtsp://localhost:8654/demo` for end-to-end testing without hardware.
-- go2rtc's WebRTC output only carries H.264/H.265 video and does not
-  transcode. A browser without an H.264 decoder (e.g. Playwright's bundled
-  Chromium) fails negotiation entirely; test video in real Chrome/Safari.
+- go2rtc does not transcode for WebRTC, and if the browser can't take the
+  source's video codec, negotiation fails entirely (audio included). In
+  testing with go2rtc 1.9.14 even a VP8 source failed against Playwright's
+  bundled Chromium, which lacks H.264. Test video in real Chrome/Safari with
+  an H.264 camera.
 - Long-running tablets: API calls time out, config load and streams retry, a
   stats watchdog reconnects frozen streams, and the router reloads on stale
   lazy chunks after a redeploy. Keep these paths working when you touch them.

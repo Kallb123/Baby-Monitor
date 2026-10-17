@@ -2,8 +2,9 @@
 #
 #   docker compose up -d --build
 #
-# Optional extras are behind profiles (combine as needed, or set
-# COMPOSE_PROFILES=demo,homeassistant in .env):
+# Optional extras are behind profiles. Repeat --profile to combine them, or set
+# COMPOSE_PROFILES=demo,homeassistant in .env (a --profile flag replaces that
+# list rather than adding to it):
 #
 #   docker compose --profile demo up -d           # fake test camera
 #   docker compose --profile homeassistant up -d  # bundled Home Assistant
@@ -14,15 +15,22 @@
 #
 # Settings are read from .env if present (see .env.example). Nothing is
 # required to start; Home Assistant data stays off until HA_TOKEN is set.
+# Env is applied when a container is created, so after editing .env run
+# `docker compose up -d` again (a plain restart keeps the old values).
+#
+# Needs Docker Compose 2.23.1 or newer for the inline `configs` below.
 
 name: baby-monitor
 
 services:
   baby-monitor:
     build: .
-    image: baby-monitor:local
     network_mode: host
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    # Overrides .env: these values must match the other services and volumes.
     environment:
       PORT: ${PORT:-3000}
       DATA_DIR: /data
@@ -82,6 +90,8 @@ services:
   # leave this profile off and point HA_URL at it instead.
   homeassistant:
     profiles: [homeassistant]
+    # Consider pinning a release (e.g. home-assistant:2026.10.x): HA does not
+    # support downgrades, so a floating tag can move your config forward.
     image: ghcr.io/home-assistant/home-assistant:stable
     network_mode: host
     restart: unless-stopped

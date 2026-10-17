@@ -71,19 +71,26 @@ cameras. Add it to the home screen for a full-screen experience.
 | --------------- | --------------- | -------------------------------- | ---------------------------------------- |
 | `baby-monitor`  | (always)        | 3000                             | This app: API + built client             |
 | `go2rtc`        | (always)        | 1984 API, 8554 RTSP, 8555 WebRTC | Turns RTSP feeds into WebRTC             |
-| `demo-camera`   | `demo`          | 8654 RTSP                        | Fake camera: test pattern + tone         |
+| `demo-camera`   | `demo`          | 1985 API, 8654 RTSP              | Fake camera: test pattern + tone         |
 | `homeassistant` | `homeassistant` | 8123                             | Bundled Home Assistant, if you have none |
 
-Turn on the optional services with `--profile`, or list them in
-`COMPOSE_PROFILES` in `.env`:
+Turn on the optional services with `--profile` (repeat it to combine), or
+list them in `COMPOSE_PROFILES` in `.env`. A `--profile` flag replaces the
+`.env` list rather than adding to it. Requires Docker Compose 2.23.1+.
 
 ```sh
 # Try it without hardware, then add a camera with RTSP URL rtsp://localhost:8654/demo
 docker compose --profile demo up -d --build
 
-# No existing Home Assistant? Run one alongside (then create a token in it).
+# No existing Home Assistant? Run one alongside.
 docker compose --profile homeassistant up -d --build
 ```
+
+With the bundled Home Assistant, finish onboarding at `http://<host>:8123`,
+create a long-lived access token (profile → Security), put it in `.env` as
+`HA_TOKEN=…` (leave `HA_URL` unset; it defaults to `http://localhost:8123`),
+then run the same `docker compose … up -d` again. Containers read `.env`
+when they are created, so `docker compose restart` won't pick it up.
 
 App config and go2rtc's saved streams live in the `baby-monitor-data` and
 `go2rtc-config` Docker volumes, so they survive rebuilds and never land in
@@ -98,7 +105,8 @@ docker compose --profile demo up -d go2rtc demo-camera
 npm run dev
 ```
 
-`npm run dev` starts the API server on port 3000 and the Vite dev server
+`npm run dev` starts the API server on port 3000 (stop the `baby-monitor`
+container first if it is running) and the Vite dev server
 (default port 5173, listening on the LAN) which proxies `/api` to it. Open the
 Vite URL on your phone or tablet, then use the gear icon to add cameras.
 
@@ -155,7 +163,8 @@ This is designed for a trusted home network.
   config and are visible in the settings screen to anyone who can
   open the app. Do not expose the app or go2rtc to the internet without a
   reverse proxy that adds authentication.
-- The go2rtc API has no authentication; keep port 1984 on the LAN.
+- The go2rtc API has no authentication; keep port 1984 (and 1985 for the
+  demo camera) on the LAN.
 
 ## Roadmap
 
