@@ -1,0 +1,12 @@
+# go2rtc config. Camera streams are registered at runtime by the Baby Monitor
+# server from the cameras saved in the app, so none are listed here.
+# Docs: https://github.com/AlexxIT/go2rtc
+api:
+  # Keep this on the LAN only: the go2rtc API has no authentication.
+  listen: ':1984'
+
+rtsp:
+  listen: ':8554'
+
+webrtc:
+  listen: ':8555'

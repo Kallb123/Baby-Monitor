@@ -147,3 +147,8 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Baby Monitor
+# Persisted app config (may contain camera credentials)
+data/
+.eslintcache

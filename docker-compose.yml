@@ -1,0 +1,21 @@
+# Runs the app and go2rtc side by side on the host network.
+# Host networking keeps WebRTC simple on a LAN: go2rtc can advertise the
+# host's real IP to browsers without NAT or port-mapping configuration.
+services:
+  baby-monitor:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      GO2RTC_URL: http://localhost:1984
+    volumes:
+      - ./data:/data
+
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml
