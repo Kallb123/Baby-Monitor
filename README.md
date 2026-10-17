@@ -57,6 +57,7 @@ monitor.
 ```sh
 npm install
 cp .env.example .env        # set HA_URL / HA_TOKEN / GO2RTC_URL
+mkdir -p data && cp go2rtc.example.yaml data/go2rtc.yaml
 docker compose up -d go2rtc # or run go2rtc any other way
 npm run dev
 ```
@@ -82,7 +83,8 @@ Config is saved to `data/config.json` (git-ignored).
 
 ```sh
 cp .env.example .env   # fill in HA_URL and HA_TOKEN
-docker compose up -d --build
+mkdir -p data && cp go2rtc.example.yaml data/go2rtc.yaml
+APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d --build
 ```
 
 This runs the app on port 3000 and go2rtc alongside it, both on the host
@@ -121,7 +123,10 @@ by the server.
 This is designed for a trusted home network.
 
 - The Home Assistant token stays on the server. The browser can only read the
-  entities referenced in the saved config.
+  entities referenced in the saved config, and the config only accepts
+  `sensor.*` and `binary_sensor.*` entities.
+- go2rtc saves registered streams, credentials included, into
+  `data/go2rtc.yaml`. Keep it out of git (`data/` is ignored).
 - Camera RTSP URLs (which often include credentials) are stored in
   `data/config.json` and are visible in the settings screen to anyone who can
   open the app. Do not expose the app or go2rtc to the internet without a

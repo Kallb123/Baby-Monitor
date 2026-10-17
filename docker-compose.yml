@@ -1,4 +1,5 @@
 # Runs the app and go2rtc side by side on the host network.
+# Before the first run:  mkdir -p data && cp go2rtc.example.yaml data/go2rtc.yaml
 # Host networking keeps WebRTC simple on a LAN: go2rtc can advertise the
 # host's real IP to browsers without NAT or port-mapping configuration.
 services:
@@ -7,6 +8,8 @@ services:
     network_mode: host
     restart: unless-stopped
     env_file: .env
+    # Run as your user so the bind-mounted ./data stays writable (see README).
+    user: '${APP_UID:-1000}:${APP_GID:-1000}'
     environment:
       DATA_DIR: /data
       GO2RTC_URL: http://localhost:1984
@@ -18,4 +21,6 @@ services:
     network_mode: host
     restart: unless-stopped
     volumes:
-      - ./go2rtc.yaml:/config/go2rtc.yaml
+      # go2rtc writes API-registered streams (RTSP URLs with credentials) into
+      # this file, so it lives in the git-ignored data dir.
+      - ./data/go2rtc.yaml:/config/go2rtc.yaml

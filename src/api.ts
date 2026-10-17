@@ -12,8 +12,11 @@ export class ApiRequestError extends Error {
   }
 }
 
+const REQUEST_TIMEOUT_MS = 10_000
+
+// A timeout matters on flaky tablet Wi-Fi: a hung request must not stall polling forever.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
+  const response = await fetch(path, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...init })
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as ApiError | undefined
     throw new ApiRequestError(response.status, body)
@@ -43,6 +46,7 @@ export async function negotiateWebRtc(cameraId: string, offerSdp: string): Promi
     method: 'POST',
     headers: { 'Content-Type': 'application/sdp' },
     body: offerSdp,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as ApiError | undefined

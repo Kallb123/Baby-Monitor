@@ -38,7 +38,8 @@ Check every item that the diff touches. Each failure is a finding.
 - Server endpoints that call Home Assistant or go2rtc use base URLs from env
   only. No endpoint lets the client choose a URL or an arbitrary HA entity
   (SSRF / data exposure). `/api/ha/states` only serves entities referenced by
-  the saved config.
+  the saved config, and the schema only accepts `sensor.*` / `binary_sensor.*`
+  ids. Widening that list needs a reason in the PR.
 - `.env`, `data/` and real camera URLs or credentials are not committed.
 
 **API and config**

@@ -150,6 +150,11 @@ commits and PR descriptions are written in normal prose.
   audio. `CameraTile.vue` unmutes the `<video>` in its click handler before
   updating the store; don't move that into a watcher.
 - Streams added through the go2rtc API may not survive a go2rtc restart, so the
-  server re-registers all cameras on startup and on every config save.
+  server re-registers all cameras on startup and on every config save. go2rtc
+  also writes those streams (with RTSP credentials) into its config file, which
+  is why Compose mounts it from the git-ignored `data/go2rtc.yaml`.
+- Long-running tablets: API calls time out, config load and streams retry, a
+  stats watchdog reconnects frozen streams, and the router reloads on stale
+  lazy chunks after a redeploy. Keep these paths working when you touch them.
 - WebRTC from go2rtc needs its WebRTC port (8555 by default) reachable from
   the viewing device. Docker Compose uses host networking for this reason.

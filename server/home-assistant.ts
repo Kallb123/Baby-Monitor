@@ -34,16 +34,21 @@ export class HomeAssistantClient {
     this.#timeoutMs = options.timeoutMs ?? 5000
   }
 
-  /** Fetches the given entities. Entities that are missing or fail are left out. */
-  async getStates(entityIds: string[]): Promise<Record<string, EntityState>> {
+  /**
+   * Fetches the given entities. Missing entities are left out; failed fetches
+   * are left out of `states` and reported in `errors` so callers can log them.
+   */
+  async getStates(
+    entityIds: string[],
+  ): Promise<{ states: Record<string, EntityState>; errors: unknown[] }> {
     const results = await Promise.allSettled(entityIds.map((id) => this.#getState(id)))
     const states: Record<string, EntityState> = {}
+    const errors: unknown[] = []
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        states[result.value.entityId] = result.value
-      }
+      if (result.status === 'rejected') errors.push(result.reason)
+      else if (result.value) states[result.value.entityId] = result.value
     }
-    return states
+    return { states, errors }
   }
 
   async #getState(entityId: string): Promise<EntityState | undefined> {

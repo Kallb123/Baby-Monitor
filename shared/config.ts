@@ -12,10 +12,18 @@ import { z } from 'zod'
 
 export const CONFIG_VERSION = 1
 
-/** Home Assistant entity ids look like `binary_sensor.nursery_crying`. */
+/**
+ * Home Assistant entity ids look like `binary_sensor.nursery_crying`. Only
+ * sensor domains are allowed: the config is writable by anyone on the LAN, and
+ * the server reads these entities with its HA token, so allowing any domain
+ * would expose locks, people, device trackers and so on.
+ */
 const entityId = z
   .string()
-  .regex(/^[a-z_]+\.[a-z0-9_]+$/, 'Expected a Home Assistant entity id, e.g. sensor.nursery_temp')
+  .regex(
+    /^(sensor|binary_sensor)\.[a-z0-9_]+$/,
+    'Expected a sensor or binary_sensor entity id, e.g. sensor.nursery_temp',
+  )
 
 const optionalEntityId = entityId.optional()
 

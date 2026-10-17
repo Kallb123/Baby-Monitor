@@ -21,15 +21,16 @@ export function getAudioContext(): AudioContext | undefined {
   return context
 }
 
+/**
+ * Resumes the AudioContext on any tap or key press while it is not running.
+ * The listeners stay installed because iOS can suspend the context again
+ * later (screen lock, backgrounding, phone call).
+ */
 export function unlockAudioOnFirstGesture() {
-  const events = ['pointerdown', 'keydown'] as const
-  const unlock = () => {
+  const resume = () => {
     const ctx = getAudioContext()
-    if (!ctx) return
-    void ctx.resume().then(() => {
-      if (ctx.state !== 'running') return
-      for (const event of events) window.removeEventListener(event, unlock)
-    })
+    if (ctx && ctx.state !== 'running') void ctx.resume()
   }
-  for (const event of events) window.addEventListener(event, unlock)
+  window.addEventListener('pointerdown', resume)
+  window.addEventListener('keydown', resume)
 }

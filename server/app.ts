@@ -63,10 +63,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   })
 
   /** States of the entities referenced by the saved config. Clients cannot query arbitrary entities. */
-  app.get('/api/ha/states', async (): Promise<EntityStatesResponse> => {
+  app.get('/api/ha/states', async (request): Promise<EntityStatesResponse> => {
     if (!deps.homeAssistant) return { configured: false, states: {} }
     const ids = referencedEntityIds(await deps.store.load())
-    return { configured: true, states: await deps.homeAssistant.getStates(ids) }
+    const { states, errors } = await deps.homeAssistant.getStates(ids)
+    if (errors.length > 0) {
+      request.log.warn({ err: errors[0], failed: errors.length }, 'Home Assistant fetch failed')
+    }
+    return { configured: true, states }
   })
 
   /** WebRTC signalling: body is the browser's SDP offer, response is go2rtc's SDP answer. */
@@ -91,7 +95,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.register(fastifyStatic, { root: deps.clientDir })
     // SPA fallback: unknown non-API GETs get index.html so client-side routes work on reload.
     app.setNotFoundHandler((request, reply) => {
-      if (request.method === 'GET' && !request.url.startsWith('/api/')) {
+      const isAppRoute = !request.url.startsWith('/api/') && !request.url.startsWith('/assets/')
+      if (request.method === 'GET' && isAppRoute) {
         return reply.sendFile('index.html')
       }
       return reply.status(404).send({ error: 'Not found' } satisfies ApiError)

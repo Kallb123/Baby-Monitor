@@ -1,5 +1,6 @@
-# go2rtc config. Camera streams are registered at runtime by the Baby Monitor
-# server from the cameras saved in the app, so none are listed here.
+# go2rtc config template. Copy to data/go2rtc.yaml (git-ignored): go2rtc
+# saves streams registered by the Baby Monitor server, including RTSP
+# credentials, back into that file.
 # Docs: https://github.com/AlexxIT/go2rtc
 api:
   # Keep this on the LAN only: the go2rtc API has no authentication.

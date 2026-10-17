@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 
 import CameraGrid from '@/components/CameraGrid.vue'
 import { useEntityStates } from '@/composables/useEntityStates'
@@ -9,11 +9,26 @@ import { useMonitorStore } from '@/stores/monitor'
 
 const configStore = useConfigStore()
 const monitor = useMonitorStore()
-const { states, configured: haConfigured } = useEntityStates()
+const { states, configured: haConfigured, error: statesError } = useEntityStates()
+
+const CONFIG_RETRY_MS = 5000
+let configRetry: ReturnType<typeof setTimeout> | undefined
 
 onMounted(() => {
   if (!configStore.loaded) void configStore.load()
 })
+
+// The server may be down when a wall tablet boots; keep retrying rather than
+// waiting for someone to reload the page.
+watch(
+  () => configStore.error,
+  (error) => {
+    clearTimeout(configRetry)
+    if (error) configRetry = setTimeout(() => void configStore.load(), CONFIG_RETRY_MS)
+  },
+)
+
+onUnmounted(() => clearTimeout(configRetry))
 </script>
 
 <template>
@@ -40,6 +55,7 @@ onMounted(() => {
     <div class="hints">
       <p v-if="!audioUnlocked" class="notice">Tap anywhere to start the sound meters</p>
       <p v-if="!haConfigured" class="notice">Home Assistant not connected</p>
+      <p v-else-if="statesError" class="notice error">Sensor data may be stale</p>
     </div>
 
     <RouterLink class="settings-link" to="/settings" aria-label="Settings">
@@ -58,7 +74,8 @@ onMounted(() => {
 .monitor {
   position: relative;
   height: 100%;
-  padding: var(--gap);
+  padding: calc(var(--gap) + env(safe-area-inset-top)) calc(var(--gap) + env(safe-area-inset-right))
+    calc(var(--gap) + env(safe-area-inset-bottom)) calc(var(--gap) + env(safe-area-inset-left));
 }
 
 .empty {
@@ -84,7 +101,7 @@ onMounted(() => {
 
 .settings-link {
   position: absolute;
-  left: calc(var(--gap) + 8px);
+  left: calc(var(--gap) + 8px + env(safe-area-inset-left));
   bottom: calc(var(--gap) + 8px + env(safe-area-inset-bottom));
   display: grid;
   place-items: center;

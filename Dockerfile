@@ -17,6 +17,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY server ./server
 COPY shared ./shared
 COPY --from=build /app/dist ./dist
+# The app runs as `node`, so it must own the data dir it writes config.json to.
+RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 EXPOSE 3000
 USER node

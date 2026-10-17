@@ -6,6 +6,10 @@ export type StreamStatus = 'connecting' | 'live' | 'error'
 
 const ICE_GATHER_TIMEOUT_MS = 2000
 const MAX_RETRY_DELAY_MS = 30_000
+/** `disconnected` often recovers by itself; only reconnect if it lasts this long. */
+const DISCONNECT_GRACE_MS = 5000
+/** How often to check that media is still arriving while "connected". */
+const WATCHDOG_INTERVAL_MS = 5000
 
 /** go2rtc's HTTP signalling is non-trickle, so the offer must carry our ICE candidates. */
 function iceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
@@ -35,6 +39,7 @@ export function useWebRtcStream(cameraId: Ref<string>) {
 
   let pc: RTCPeerConnection | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let watchdog: ReturnType<typeof setInterval> | undefined
   let attempt = 0
   // Bumped on every (re)connect so callbacks from a superseded connection are ignored.
   let generation = 0
@@ -42,18 +47,43 @@ export function useWebRtcStream(cameraId: Ref<string>) {
   function teardown() {
     clearTimeout(retryTimer)
     retryTimer = undefined
+    clearInterval(watchdog)
+    watchdog = undefined
     pc?.close()
     pc = undefined
   }
 
-  function scheduleRetry(gen: number) {
+  function scheduleRetry(gen: number, minDelay = 0) {
     if (gen !== generation || retryTimer) return
-    const delay = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** attempt)
+    const delay = Math.max(minDelay, Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** attempt))
     attempt++
     retryTimer = setTimeout(() => {
       retryTimer = undefined
       void connect()
     }, delay)
+  }
+
+  /**
+   * A camera or go2rtc's RTSP pull can stall while the peer connection stays
+   * "connected", leaving a frozen frame. Reconnect when no bytes arrive.
+   */
+  function startWatchdog(peer: RTCPeerConnection, gen: number) {
+    clearInterval(watchdog)
+    let lastBytes = -1
+    watchdog = setInterval(async () => {
+      const stats = await peer.getStats().catch(() => undefined)
+      if (!stats || gen !== generation) return
+      let bytes = 0
+      stats.forEach((report: { type: string; bytesReceived?: number }) => {
+        if (report.type === 'inbound-rtp') bytes += report.bytesReceived ?? 0
+      })
+      if (bytes === lastBytes) {
+        status.value = 'error'
+        error.value = 'No media received'
+        void connect()
+      }
+      lastBytes = bytes
+    }, WATCHDOG_INTERVAL_MS)
   }
 
   async function connect() {
@@ -76,12 +106,20 @@ export function useWebRtcStream(cameraId: Ref<string>) {
     peer.addEventListener('connectionstatechange', () => {
       if (gen !== generation) return
       if (peer.connectionState === 'connected') {
+        // Cancel a reconnect queued by a brief `disconnected` blip.
+        clearTimeout(retryTimer)
+        retryTimer = undefined
         status.value = 'live'
         error.value = undefined
         attempt = 0
-      } else if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
+        startWatchdog(peer, gen)
+      } else if (peer.connectionState === 'disconnected') {
         status.value = 'error'
-        error.value = `Connection ${peer.connectionState}`
+        error.value = 'Connection interrupted'
+        scheduleRetry(gen, DISCONNECT_GRACE_MS)
+      } else if (peer.connectionState === 'failed') {
+        status.value = 'error'
+        error.value = 'Connection failed'
         scheduleRetry(gen)
       }
     })

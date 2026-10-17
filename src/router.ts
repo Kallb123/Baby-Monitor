@@ -10,4 +10,13 @@ const router = createRouter({
   ],
 })
 
+// After a redeploy, a long-open tablet may request lazy chunks that no longer
+// exist. Reload once to pick up the new build instead of leaving a dead link.
+router.onError((error, to) => {
+  const chunkFailed = /dynamically imported module|Importing a module script failed/i.test(
+    String(error?.message ?? error),
+  )
+  if (chunkFailed) window.location.assign(to.fullPath)
+})
+
 export default router
