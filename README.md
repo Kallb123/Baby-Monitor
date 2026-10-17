@@ -48,17 +48,53 @@ monitor.
 - Node.js 22.18+ or 24.12+ (the server runs TypeScript directly via Node's
   type stripping, no build step).
 - [go2rtc](https://github.com/AlexxIT/go2rtc) reachable from the server, and
-  its WebRTC port reachable from the viewing devices.
+  its WebRTC port reachable from the viewing devices. Docker Compose sets both
+  up for you.
+- Cameras that send H.264 video (H.265 only plays in Safari). go2rtc's WebRTC
+  output does not transcode, so browsers need a matching decoder.
 - Home Assistant with a long-lived access token (optional; without it the app
   runs without cry/temperature data).
 
-## Quick start (development)
+## Run the whole stack (Docker)
+
+```sh
+cp .env.example .env              # optional: set HA_URL and HA_TOKEN
+docker compose up -d --build
+```
+
+Open `http://<host>:3000` on each device, then tap the gear icon to add
+cameras. Add it to the home screen for a full-screen experience.
+
+`docker-compose.yml` runs everything on the host network:
+
+| Service         | Profile         | Port(s)                          | What it is                               |
+| --------------- | --------------- | -------------------------------- | ---------------------------------------- |
+| `baby-monitor`  | (always)        | 3000                             | This app: API + built client             |
+| `go2rtc`        | (always)        | 1984 API, 8554 RTSP, 8555 WebRTC | Turns RTSP feeds into WebRTC             |
+| `demo-camera`   | `demo`          | 8654 RTSP                        | Fake camera: test pattern + tone         |
+| `homeassistant` | `homeassistant` | 8123                             | Bundled Home Assistant, if you have none |
+
+Turn on the optional services with `--profile`, or list them in
+`COMPOSE_PROFILES` in `.env`:
+
+```sh
+# Try it without hardware, then add a camera with RTSP URL rtsp://localhost:8654/demo
+docker compose --profile demo up -d --build
+
+# No existing Home Assistant? Run one alongside (then create a token in it).
+docker compose --profile homeassistant up -d --build
+```
+
+App config and go2rtc's saved streams live in the `baby-monitor-data` and
+`go2rtc-config` Docker volumes, so they survive rebuilds and never land in
+the git working tree. `docker compose down -v` wipes them.
+
+## Development
 
 ```sh
 npm install
-cp .env.example .env        # set HA_URL / HA_TOKEN / GO2RTC_URL
-mkdir -p data && cp go2rtc.example.yaml data/go2rtc.yaml
-docker compose up -d go2rtc # or run go2rtc any other way
+cp .env.example .env              # set HA_URL / HA_TOKEN if you have them
+docker compose --profile demo up -d go2rtc demo-camera
 npm run dev
 ```
 
@@ -77,19 +113,7 @@ For each camera you set:
 | Temperature entity   | `sensor.nursery_temperature`                    |
 | Humidity entity      | `sensor.nursery_humidity`                       |
 
-Config is saved to `data/config.json` (git-ignored).
-
-## Running it at home (Docker)
-
-```sh
-cp .env.example .env   # fill in HA_URL and HA_TOKEN
-mkdir -p data && cp go2rtc.example.yaml data/go2rtc.yaml
-APP_UID=$(id -u) APP_GID=$(id -g) docker compose up -d --build
-```
-
-This runs the app on port 3000 and go2rtc alongside it, both on the host
-network. Open `http://<host>:3000` on each device. Add it to the home screen
-for a full-screen experience.
+Outside Docker, config is saved to `data/config.json` (git-ignored).
 
 ## Scripts
 
@@ -125,10 +149,10 @@ This is designed for a trusted home network.
 - The Home Assistant token stays on the server. The browser can only read the
   entities referenced in the saved config, and the config only accepts
   `sensor.*` and `binary_sensor.*` entities.
-- go2rtc saves registered streams, credentials included, into
-  `data/go2rtc.yaml`. Keep it out of git (`data/` is ignored).
-- Camera RTSP URLs (which often include credentials) are stored in
-  `data/config.json` and are visible in the settings screen to anyone who can
+- go2rtc saves registered streams, credentials included, in its config
+  file (the `go2rtc-config` volume under Docker).
+- Camera RTSP URLs (which often include credentials) are stored in the app
+  config and are visible in the settings screen to anyone who can
   open the app. Do not expose the app or go2rtc to the internet without a
   reverse proxy that adds authentication.
 - The go2rtc API has no authentication; keep port 1984 on the LAN.

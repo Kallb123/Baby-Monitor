@@ -152,7 +152,13 @@ commits and PR descriptions are written in normal prose.
 - Streams added through the go2rtc API may not survive a go2rtc restart, so the
   server re-registers all cameras on startup and on every config save. go2rtc
   also writes those streams (with RTSP credentials) into its config file, which
-  is why Compose mounts it from the git-ignored `data/go2rtc.yaml`.
+  is why Compose keeps it in the `go2rtc-config` volume. Compose layers a fixed
+  base config over that file so ports can't drift.
+- `docker compose --profile demo` adds a fake H.264 + Opus camera at
+  `rtsp://localhost:8654/demo` for end-to-end testing without hardware.
+- go2rtc's WebRTC output only carries H.264/H.265 video and does not
+  transcode. A browser without an H.264 decoder (e.g. Playwright's bundled
+  Chromium) fails negotiation entirely; test video in real Chrome/Safari.
 - Long-running tablets: API calls time out, config load and streams retry, a
   stats watchdog reconnects frozen streams, and the router reloads on stale
   lazy chunks after a redeploy. Keep these paths working when you touch them.
