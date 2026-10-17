@@ -1,0 +1,98 @@
+:root {
+  --bg: #0b0d12;
+  --surface: #161a22;
+  --border: #2a303c;
+  --text: #e8ecf3;
+  --text-muted: #9aa3b2;
+  --accent: #4da3ff;
+  --alert: #ff4d4f;
+  --meter-low: #3ddc84;
+  --meter-mid: #ffc53d;
+  --meter-high: #ff4d4f;
+  --radius: 10px;
+  --gap: 6px;
+
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  /* Full-bleed on notched phones; components add safe-area padding where needed. */
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  overscroll-behavior: none;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+button,
+.button {
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.button,
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #001224;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 8px;
+}
+
+button.danger {
+  align-self: flex-start;
+  border-color: var(--alert);
+  color: var(--alert);
+  background: transparent;
+}
+
+.notice {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 60%);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.notice.error {
+  color: var(--alert);
+}

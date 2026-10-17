@@ -1,0 +1,11 @@
+dist
+coverage
+data
+package-lock.json
+# Vendored verbatim from upstream; see .claude/vendor/caveman/README.md
+.claude/agents/cavecrew-*.md
+.claude/skills/caveman*/
+.claude/skills/ultracave/
+.claude/skills/cavecrew/
+.claude/vendor/caveman/LICENSE*
+.claude/vendor/caveman/NOTICE

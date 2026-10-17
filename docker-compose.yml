@@ -1,0 +1,137 @@
+# The whole Baby Monitor stack. Start it with:
+#
+#   docker compose up -d --build
+#
+# Optional extras are behind profiles. Repeat --profile to combine them, or set
+# COMPOSE_PROFILES=demo,homeassistant in .env (a --profile flag replaces that
+# list rather than adding to it):
+#
+#   docker compose --profile demo up -d           # fake test camera
+#   docker compose --profile homeassistant up -d  # bundled Home Assistant
+#
+# Every service uses host networking. WebRTC then works on a LAN without NAT
+# or port mapping: go2rtc can advertise the host's real IP to browsers, and
+# services reach each other on localhost.
+#
+# Settings are read from .env if present (see .env.example). Nothing is
+# required to start; Home Assistant data stays off until HA_TOKEN is set.
+# Env is applied when a container is created, so after editing .env run
+# `docker compose up -d` again (a plain restart keeps the old values).
+#
+# Needs Docker Compose 2.23.1 or newer for the inline `configs` below.
+
+name: baby-monitor
+
+services:
+  baby-monitor:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    # Overrides .env: these values must match the other services and volumes.
+    environment:
+      PORT: ${PORT:-3000}
+      DATA_DIR: /data
+      GO2RTC_URL: http://localhost:1984
+      HA_URL: ${HA_URL:-http://localhost:8123}
+      HA_TOKEN: ${HA_TOKEN:-}
+    volumes:
+      - baby-monitor-data:/data
+    depends_on:
+      # The server registers cameras with go2rtc on startup, so go2rtc must be up first.
+      go2rtc:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # Pulls each camera's RTSP feed and serves it to browsers over WebRTC.
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    network_mode: host
+    restart: unless-stopped
+    command: ['go2rtc', '-config', '/config/go2rtc.yaml', '-config', '/etc/go2rtc/base.yaml']
+    configs:
+      - source: go2rtc-base
+        target: /etc/go2rtc/base.yaml
+    volumes:
+      # go2rtc saves API-registered streams here, including RTSP credentials,
+      # so it lives in a Docker volume rather than the git working tree.
+      - go2rtc-config:/config
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:1984/api']
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+
+  # Fake RTSP camera (test pattern + a swelling tone) for trying the app
+  # without hardware. Add a camera with RTSP URL rtsp://localhost:8654/demo.
+  demo-camera:
+    profiles: [demo]
+    image: alexxit/go2rtc:1.9.14
+    network_mode: host
+    restart: unless-stopped
+    command: ['go2rtc', '-config', '/etc/go2rtc/demo.yaml']
+    configs:
+      - source: demo-camera
+        target: /etc/go2rtc/demo.yaml
+
+  # For setups without an existing Home Assistant. If you already run HA,
+  # leave this profile off and point HA_URL at it instead.
+  homeassistant:
+    profiles: [homeassistant]
+    # Consider pinning a release (e.g. home-assistant:2026.10.x): HA does not
+    # support downgrades, so a floating tag can move your config forward.
+    image: ghcr.io/home-assistant/home-assistant:stable
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - homeassistant-config:/config
+
+configs:
+  go2rtc-base:
+    content: |
+      # Loaded after /config/go2rtc.yaml, so these settings always win.
+      api:
+        # Keep this on the LAN only: the go2rtc API has no authentication.
+        listen: ':1984'
+      rtsp:
+        listen: ':8554'
+      webrtc:
+        listen: ':8555'
+
+  demo-camera:
+    content: |
+      api:
+        listen: ':1985'
+      rtsp:
+        listen: ':8654'
+      webrtc:
+        listen: ''
+      streams:
+        # H.264 + Opus, like a typical IP camera. The tone fades in and out
+        # every few seconds so the level meter has something to show.
+        demo: >-
+          exec:ffmpeg -hide_banner -re
+          -f lavfi -i testsrc2=size=1280x720:rate=15
+          -f lavfi -i "aevalsrc=0.6*sin(2*PI*330*t)*pow(abs(sin(PI*0.25*t))\,3):s=48000"
+          -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -pix_fmt yuv420p
+          -c:a libopus -b:a 64k
+          -rtsp_transport tcp -f rtsp {output}
+
+volumes:
+  baby-monitor-data:
+  go2rtc-config:
+  homeassistant-config:
