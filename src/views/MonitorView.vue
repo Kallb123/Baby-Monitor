@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
+import CameraDialog from '@/components/CameraDialog.vue'
 import CameraGrid from '@/components/CameraGrid.vue'
+import MonitorHeader from '@/components/MonitorHeader.vue'
 import { useEntityStates } from '@/composables/useEntityStates'
 import { audioUnlocked } from '@/lib/audio-context'
+import { MAX_CAMERAS } from '@/lib/cameras'
+import { isCrying } from '@/lib/entities'
+import { statusLine } from '@/lib/status-line'
 import { useConfigStore } from '@/stores/config'
 import { useMonitorStore } from '@/stores/monitor'
+import { referencedEntityIds } from '@shared/config.ts'
 
 const configStore = useConfigStore()
 const monitor = useMonitorStore()
@@ -29,86 +35,139 @@ watch(
 )
 
 onUnmounted(() => clearTimeout(configRetry))
+
+const cameras = computed(() => configStore.config.cameras)
+const layoutMode = computed(() => monitor.layoutMode ?? configStore.config.layout.mode)
+const focusCameraId = computed(
+  () => monitor.focusCameraId ?? configStore.config.layout.focusCameraId,
+)
+
+/** Dialog state: `null` closed, `{}` adding, `{ cameraId }` editing. */
+const dialog = ref<{ cameraId?: string } | null>(null)
+
+const status = computed(() =>
+  statusLine({
+    editing: monitor.editing,
+    cryingNames: cameras.value
+      .filter((c) => isCrying(c.entities.cry ? states.value[c.entities.cry] : undefined))
+      .map((c) => c.name),
+    listeningName: cameras.value.find((c) => c.id === monitor.audioCameraId)?.name,
+    audioUnlocked: audioUnlocked.value,
+    hasCameras: cameras.value.length > 0,
+  }),
+)
+
+// Only worth flagging when some camera actually uses Home Assistant data.
+const notice = computed(() => {
+  if (referencedEntityIds(configStore.config).length === 0) return undefined
+  if (!haConfigured.value) return 'Home Assistant not connected'
+  if (statesError.value) return 'Sensor data may be stale'
+  return undefined
+})
+
+function onAudio(cameraId: string, on: boolean) {
+  monitor.setAudio(cameraId, on)
+  monitor.focus(cameraId)
+}
+
+function toggleEdit() {
+  monitor.setEditing(!monitor.editing && cameras.value.length > 0)
+}
+
+function openAdd() {
+  if (cameras.value.length < MAX_CAMERAS) dialog.value = {}
+}
 </script>
 
 <template>
-  <main class="monitor">
-    <p v-if="configStore.error" class="notice error">
-      Could not load config: {{ configStore.error }}
-    </p>
-
-    <div v-else-if="configStore.loaded && configStore.config.cameras.length === 0" class="empty">
-      <h1>No cameras yet</h1>
-      <p>Add your RTSP cameras to start monitoring.</p>
-      <RouterLink class="button" to="/settings">Add a camera</RouterLink>
-    </div>
-
-    <CameraGrid
-      v-else
-      :cameras="configStore.config.cameras"
-      :layout="configStore.config.layout"
-      :states="states"
-      :audio-camera-id="monitor.audioCameraId"
-      @toggle-audio="monitor.toggleAudio"
+  <div class="monitor">
+    <MonitorHeader
+      :status="status"
+      :notice="notice"
+      :layout-mode="layoutMode"
+      :editing="monitor.editing"
+      :can-edit="cameras.length > 0"
+      :can-add="configStore.loaded && cameras.length < MAX_CAMERAS"
+      @layout="monitor.setLayout"
+      @toggle-edit="toggleEdit"
+      @add="openAdd"
     />
 
-    <div class="hints">
-      <p v-if="!audioUnlocked" class="notice">Tap anywhere to start the sound meters</p>
-      <p v-if="!haConfigured" class="notice">Home Assistant not connected</p>
-      <p v-else-if="statesError" class="notice error">Sensor data may be stale</p>
-    </div>
+    <main class="content">
+      <div v-if="configStore.error && !configStore.loaded" class="card" role="alert">
+        <h2 class="card-title">Can't reach the monitor</h2>
+        <p class="card-body">{{ configStore.error }}. Trying again in a few seconds.</p>
+      </div>
 
-    <RouterLink class="settings-link" to="/settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"
-          transform="translate(-1 0)"
-        />
-      </svg>
-    </RouterLink>
-  </main>
+      <div v-else-if="configStore.loaded && cameras.length === 0" class="card">
+        <h2 class="card-title">No cameras yet</h2>
+        <p class="card-body">Add a camera to start watching. You can connect up to four.</p>
+        <button type="button" class="btn btn-primary card-action" @click="openAdd">
+          Add camera
+        </button>
+      </div>
+
+      <CameraGrid
+        v-else-if="configStore.loaded"
+        :cameras="cameras"
+        :mode="layoutMode"
+        :focus-camera-id="focusCameraId"
+        :states="states"
+        :audio-camera-id="monitor.audioCameraId"
+        :editing="monitor.editing"
+        @audio="onAudio"
+        @edit="(cameraId) => (dialog = { cameraId })"
+      />
+    </main>
+
+    <CameraDialog v-if="dialog" :camera-id="dialog.cameraId" @close="dialog = null" />
+  </div>
 </template>
 
 <style scoped>
 .monitor {
-  position: relative;
-  height: 100%;
-  padding: calc(var(--gap) + env(safe-area-inset-top)) calc(var(--gap) + env(safe-area-inset-right))
-    calc(var(--gap) + env(safe-area-inset-bottom)) calc(var(--gap) + env(safe-area-inset-left));
-}
-
-.empty {
-  display: grid;
-  place-content: center;
-  gap: 12px;
-  height: 100%;
-  text-align: center;
-}
-
-.hints {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--gap) + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  pointer-events: none;
-  white-space: nowrap;
+  height: 100%;
+  user-select: none;
 }
 
-.settings-link {
-  position: absolute;
-  left: calc(var(--gap) + 8px + env(safe-area-inset-left));
-  bottom: calc(var(--gap) + 8px + env(safe-area-inset-bottom));
+.content {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: var(--text);
-  background: rgb(0 0 0 / 45%);
+  padding: 12px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))
+    calc(20px + env(safe-area-inset-left));
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
+  border-radius: var(--radius-card);
+  background: var(--color-tile);
+}
+
+.card-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.card-body {
+  margin: 0;
+  max-width: 420px;
+  font-size: 16px;
+  color: var(--color-text-muted);
+}
+
+.card-action {
+  height: 52px;
+  padding: 0 24px;
+  font-size: 16px;
 }
 </style>

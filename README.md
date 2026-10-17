@@ -4,13 +4,16 @@ A web app that turns any phone, tablet or wall display into a multi-camera baby
 monitor.
 
 - Shows several camera streams at once, in a grid or a "focus" layout with one
-  large camera and a strip of thumbnails.
+  large camera and a strip of thumbnails. Each device remembers its own layout.
 - Tap a stream to hear its audio. Only one stream is audible at a time; tap it
   again to mute.
 - Every stream has a live sound-level meter, so you can see noise even while
   its audio is muted.
-- A crying icon lights up when Home Assistant reports crying. Temperature and
+- A tile glows and shows a "Crying" badge when Home Assistant reports crying,
+  and reads "Stirring" while its sound level is raised. Temperature and
   humidity come from Home Assistant too.
+- Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
+  camera.
 - Works in portrait and landscape.
 
 > **Status:** foundation. The app shell, config persistence, layouts, level
@@ -68,8 +71,8 @@ with `docker compose pull && docker compose up -d`. Set `BABY_MONITOR_TAG` in
 `.env` to pin a `sha-…` tag. Add `--build` to `up` to build the image from
 your checkout instead.
 
-Open `http://<host>:3000` on each device, then tap the gear icon to add
-cameras. Add it to the home screen for a full-screen experience.
+Open `http://<host>:3000` on each device, then tap **+** to add cameras. Add
+it to the home screen for a full-screen experience.
 
 `docker-compose.yml` runs everything on the host network:
 
@@ -114,18 +117,20 @@ npm run dev
 `npm run dev` starts the API server on port 3000 (stop the `baby-monitor`
 container first if it is running) and the Vite dev server
 (default port 5173, listening on the LAN) which proxies `/api` to it. Open the
-Vite URL on your phone or tablet, then use the gear icon to add cameras.
+Vite URL on your phone or tablet, then tap **+** to add cameras (up to four).
 
 For each camera you set:
 
-| Field                | Example                                         |
-| -------------------- | ----------------------------------------------- |
-| Name                 | `Nursery`                                       |
-| ID                   | `nursery` (also used as the go2rtc stream name) |
-| RTSP URL             | `rtsp://user:pass@192.168.1.20:554/stream1`     |
-| Cry detection entity | `binary_sensor.nursery_crying`                  |
-| Temperature entity   | `sensor.nursery_temperature`                    |
-| Humidity entity      | `sensor.nursery_humidity`                       |
+| Field                     | Example                                     |
+| ------------------------- | ------------------------------------------- |
+| Camera name               | `Nursery`                                   |
+| Stream address (RTSP)     | `rtsp://user:pass@192.168.1.20:554/stream1` |
+| Cry detection (HA sensor) | `binary_sensor.nursery_crying`              |
+| Temperature (HA sensor)   | `sensor.nursery_temperature`                |
+| Humidity (HA sensor)      | `sensor.nursery_humidity`                   |
+
+The camera id, which is also its go2rtc stream name, is derived from the name
+when the camera is added (`Maya's room` → `maya-s-room`) and never changes.
 
 Outside Docker, config is saved to `data/config.json` (git-ignored).
 
@@ -166,7 +171,7 @@ This is designed for a trusted home network.
 - go2rtc saves registered streams, credentials included, in its config
   file (the `go2rtc-config` volume under Docker).
 - Camera RTSP URLs (which often include credentials) are stored in the app
-  config and are visible in the settings screen to anyone who can
+  config and are visible in the edit dialog to anyone who can
   open the app. Do not expose the app or go2rtc to the internet without a
   reverse proxy that adds authentication.
 - The go2rtc API has no authentication; keep port 1984 (and 1985 for the
