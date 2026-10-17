@@ -1,5 +1,14 @@
 # The whole Baby Monitor stack. Start it with:
 #
+#   docker compose up -d
+#
+# The app image comes from GHCR and is rebuilt on every push to main. To update:
+#
+#   docker compose pull && docker compose up -d
+#
+# To run local changes instead, build the image from this checkout (it is tagged
+# with the GHCR name, so a later `pull` switches back to the published image):
+#
 #   docker compose up -d --build
 #
 # Optional extras are behind profiles. Repeat --profile to combine them, or set
@@ -24,6 +33,7 @@ name: baby-monitor
 
 services:
   baby-monitor:
+    image: ghcr.io/kallb123/baby-monitor:${BABY_MONITOR_TAG:-latest}
     build: .
     network_mode: host
     restart: unless-stopped
