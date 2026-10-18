@@ -6,8 +6,11 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'monitor', component: MonitorView },
-    // Cameras are now edited in place on the monitor; keep old bookmarks working.
-    { path: '/settings', redirect: '/' },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('./views/SettingsView.vue'),
+    },
   ],
 })
 

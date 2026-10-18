@@ -14,6 +14,9 @@ monitor.
   humidity come from Home Assistant too.
 - Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
   camera.
+- A settings page (the gear in the header) can show each meter's level in
+  decibels (dBFS) on this device, and shows the Home Assistant URL and whether
+  the server can reach Home Assistant.
 - Works in portrait and landscape.
 
 > **Status:** foundation. The app shell, config persistence, layouts, level
@@ -159,7 +162,9 @@ Server settings come from environment variables (see `.env.example`):
 | `DATA_DIR`      | `./data`                | Where `config.json` is stored          |
 
 Everything else (cameras, entities, layout) is edited in the app and persisted
-by the server.
+by the server. The settings page shows `HA_URL` and `GO2RTC_URL` read-only,
+with a live check of the Home Assistant connection, which helps when setting
+up `HA_TOKEN`.
 
 ## Security notes
 

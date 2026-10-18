@@ -4,7 +4,12 @@ import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
 
-import type { ApiError, EntityStatesResponse, HealthResponse } from '../shared/api.ts'
+import type {
+  ApiError,
+  EntityStatesResponse,
+  HealthResponse,
+  SystemInfoResponse,
+} from '../shared/api.ts'
 import { referencedEntityIds } from '../shared/config.ts'
 import type { ConfigStore } from './config-store.ts'
 import type { Go2rtcClient } from './go2rtc.ts'
@@ -15,9 +20,32 @@ export interface AppDeps {
   go2rtc: Go2rtcClient
   /** Undefined when HA_URL / HA_TOKEN are not configured. */
   homeAssistant?: HomeAssistantClient
+  /** HA_URL, shown on the settings page even when HA_TOKEN is missing. */
+  haUrl?: string
   /** Built client directory to serve. Skipped when missing (e.g. in dev, where Vite serves it). */
   clientDir?: string
   logger?: boolean
+}
+
+/** Drops user:password@ so an HA_URL with embedded credentials is safe to show. */
+function displayUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return undefined
+  }
+}
+
+async function homeAssistantInfo(deps: AppDeps): Promise<SystemInfoResponse['homeAssistant']> {
+  const rawUrl = deps.homeAssistant?.baseUrl ?? deps.haUrl
+  const url = rawUrl ? displayUrl(rawUrl) : undefined
+  if (!deps.homeAssistant) {
+    const missing = rawUrl ? 'HA_TOKEN is not set' : 'HA_URL and HA_TOKEN are not set'
+    return { url, status: 'unconfigured', message: missing }
+  }
+  const message = await deps.homeAssistant.check()
+  return message ? { url, status: 'error', message } : { url, status: 'connected' }
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -48,6 +76,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ok: true,
     homeAssistant: Boolean(deps.homeAssistant),
     go2rtc: deps.go2rtc.baseUrl,
+  }))
+
+  /** Read-only server settings and a live Home Assistant check, for the settings page. */
+  app.get('/api/system', async (): Promise<SystemInfoResponse> => ({
+    homeAssistant: await homeAssistantInfo(deps),
+    go2rtc: { url: displayUrl(deps.go2rtc.baseUrl) },
   }))
 
   app.get('/api/config', async () => deps.store.load())

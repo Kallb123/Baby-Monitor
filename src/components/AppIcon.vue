@@ -1,5 +1,5 @@
 <script lang="ts">
-type IconElement = { tag: 'path' | 'rect' | 'line'; attrs: Record<string, string> }
+type IconElement = { tag: 'path' | 'rect' | 'line' | 'circle'; attrs: Record<string, string> }
 
 const path = (d: string): IconElement => ({ tag: 'path', attrs: { d } })
 const rect = (x: string, y: string, width: string, height: string, rx: string): IconElement => ({
@@ -9,6 +9,11 @@ const rect = (x: string, y: string, width: string, height: string, rx: string): 
 const line = (x1: string, y1: string, x2: string, y2: string): IconElement => ({
   tag: 'line',
   attrs: { x1, y1, x2, y2 },
+})
+
+const circle = (cx: string, cy: string, r: string): IconElement => ({
+  tag: 'circle',
+  attrs: { cx, cy, r },
 })
 
 const speaker = path(
@@ -52,6 +57,13 @@ const icons = {
     path('M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'),
     path('M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'),
   ],
+  settings: [
+    path(
+      'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
+    ),
+    circle('12', '12', '3'),
+  ],
+  'arrow-left': [path('m12 19-7-7 7-7'), path('M19 12H5')],
 } satisfies Record<string, IconElement[]>
 
 export type IconName = keyof typeof icons

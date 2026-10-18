@@ -46,9 +46,13 @@ Data flow:
   focused camera are per device (`localStorage`, via `useMonitorStore`), with
   the config's `layout` as the default. Don't save them to the server: every
   config save re-registers all streams with go2rtc.
-- **Editing**: there is no settings page. The header's **+** and **Edit**
+- **Editing**: cameras are edited in place. The header's **+** and **Edit**
   open `CameraDialog.vue`, which validates with the shared schema and saves
   the whole config through the config store.
+- **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
+  such as the dB readout, kept in `localStorage` by `useSettingsStore` (not on
+  the server, for the same reason as the layout), plus read-only server
+  settings and a live Home Assistant check from `GET /api/system`.
 
 ### API
 
@@ -58,6 +62,7 @@ Data flow:
 | GET    | `/api/config`             | Current config                                                      |
 | PUT    | `/api/config`             | Validate, persist and return the config; 400 with `issues` on error |
 | GET    | `/api/ha/states`          | States of entities referenced by the config                         |
+| GET    | `/api/system`             | HA URL (credentials stripped), live HA check, go2rtc URL            |
 | POST   | `/api/streams/:id/webrtc` | Body: SDP offer (`application/sdp`). Returns SDP answer             |
 
 ## Commands
@@ -86,8 +91,9 @@ Run `npm run check` before you commit. CI runs the same plus a build.
 - **Vue**: `<script setup lang="ts">`, Composition API, typed `defineProps` /
   `defineEmits`. Put reusable stateful logic in `src/composables/use*.ts` and
   pure logic in `src/lib/` so it can be unit tested without a DOM.
-- **State**: Pinia setup stores in `src/stores/`. Persisted settings go through
-  the config store and server; transient UI state stays in its own store.
+- **State**: Pinia setup stores in `src/stores/`. Shared settings go through
+  the config store and server; per-device settings go in `localStorage` via
+  `src/lib/local-storage.ts`; transient UI state stays in its own store.
 - **Validation**: every API input is validated with zod. Add fields to
   `shared/config.ts` rather than declaring types twice.
 - **Secrets** never go in `shared/`, the config, API responses or the client.

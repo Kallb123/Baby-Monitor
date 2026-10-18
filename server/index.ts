@@ -18,6 +18,7 @@ const app = await buildApp({
   store,
   go2rtc,
   homeAssistant,
+  haUrl: env.haUrl,
   clientDir: process.env.NODE_ENV === 'production' ? env.clientDir : undefined,
   logger: true,
 })
