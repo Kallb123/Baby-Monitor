@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { cameraSchema } from '@shared/config.ts'
-import { cameraIdFromName } from '../cameras'
+import { cameraIdFromName, visibleCameras } from '../cameras'
 
 const isValidId = (id: string) => cameraSchema.shape.id.safeParse(id).success
 
@@ -26,5 +26,25 @@ describe('cameraIdFromName', () => {
     ['  -Nursery-  ', []],
   ])('produces an id the config schema accepts for %j', (name, taken) => {
     expect(isValidId(cameraIdFromName(name, taken))).toBe(true)
+  })
+})
+
+describe('visibleCameras', () => {
+  const cameras = [{ id: 'nursery' }, { id: 'cot' }, { id: 'hall' }]
+
+  it('returns every camera when none is hidden', () => {
+    expect(visibleCameras(cameras, [])).toEqual(cameras)
+  })
+
+  it('drops hidden cameras and keeps the config order', () => {
+    expect(visibleCameras(cameras, ['cot'])).toEqual([{ id: 'nursery' }, { id: 'hall' }])
+  })
+
+  it('ignores ids of cameras that no longer exist', () => {
+    expect(visibleCameras(cameras, ['gone'])).toEqual(cameras)
+  })
+
+  it('can hide everything', () => {
+    expect(visibleCameras(cameras, ['nursery', 'cot', 'hall'])).toEqual([])
   })
 })

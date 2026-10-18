@@ -36,4 +36,14 @@ describe('statusLine', () => {
       'Tap anywhere to start the sound meters',
     )
   })
+
+  it('says so when every camera is hidden on this device', () => {
+    expect(statusLine({ ...idle, hasCameras: false, allHidden: true })).toBe(
+      'All cameras are hidden',
+    )
+  })
+
+  it('still asks for a camera when none exist', () => {
+    expect(statusLine({ ...idle, hasCameras: false })).toBe('Add a camera to start')
+  })
 })
