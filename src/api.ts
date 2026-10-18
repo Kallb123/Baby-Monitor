@@ -1,4 +1,4 @@
-import type { ApiError, EntityStatesResponse } from '@shared/api.ts'
+import type { ApiError, EntityStatesResponse, SystemInfoResponse } from '@shared/api.ts'
 import type { AppConfig } from '@shared/config.ts'
 
 export class ApiRequestError extends Error {
@@ -38,6 +38,10 @@ export function saveConfig(config: AppConfig): Promise<AppConfig> {
 
 export function fetchEntityStates(): Promise<EntityStatesResponse> {
   return request('/api/ha/states')
+}
+
+export function fetchSystemInfo(): Promise<SystemInfoResponse> {
+  return request('/api/system')
 }
 
 /** Sends a WebRTC SDP offer for a camera and returns the SDP answer. */

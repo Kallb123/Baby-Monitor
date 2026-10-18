@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onScopeDispose, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import type { LayoutMode } from '@shared/config.ts'
 import AppIcon from './AppIcon.vue'
@@ -77,16 +78,20 @@ const layouts = [
     >
       <AppIcon name="plus" :size="22" />
     </button>
+
+    <RouterLink to="/settings" class="settings-btn" aria-label="Settings" title="Settings">
+      <AppIcon name="settings" :size="22" />
+    </RouterLink>
   </header>
 </template>
 
 <style scoped>
 .monitor-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   grid-template-areas:
-    'title layouts edit add'
-    'status layouts edit add';
+    'title layouts edit add settings'
+    'status layouts edit add settings';
   align-items: center;
   column-gap: 16px;
   flex: none;
@@ -131,7 +136,8 @@ const layouts = [
 }
 
 .layout-btn,
-.add-btn {
+.add-btn,
+.settings-btn {
   display: grid;
   place-items: center;
   flex: none;
@@ -193,18 +199,32 @@ const layouts = [
   background: var(--color-accent-400);
 }
 
+.settings-btn {
+  grid-area: settings;
+  width: 52px;
+  height: 52px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.settings-btn:hover {
+  filter: brightness(1.12);
+}
+
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
 /* Phones in portrait: icon-only Edit, and the status line gets its own row so
-   "… crying" isn't cut off next to the buttons. */
+   "… crying" isn't cut off next to the buttons. Settings drops into that row
+   too, or five buttons would squeeze the title out. */
 @media (max-width: 560px) {
   .monitor-header {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
     grid-template-areas:
       'title layouts edit add'
-      'status status status status';
+      'status status status settings';
     column-gap: 8px;
     row-gap: 6px;
     padding-left: calc(16px + env(safe-area-inset-left));
@@ -213,6 +233,18 @@ button:disabled {
 
   .title {
     align-self: center;
+  }
+
+  .status {
+    align-self: center;
+  }
+
+  .settings-btn {
+    justify-self: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    color: var(--color-text-muted);
   }
 
   .edit-btn {

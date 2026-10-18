@@ -35,6 +35,7 @@ describe('server app', () => {
     go2rtcFetch = vi.fn<typeof fetch>(async () => new Response('v=0 answer', { status: 201 }))
     haFetch = vi.fn<typeof fetch>(async (input) => {
       const url = String(input)
+      if (url === 'http://ha:8123/api/') return jsonResponse({ message: 'API running.' })
       if (url.endsWith('/binary_sensor.nursery_crying')) {
         return jsonResponse({
           entity_id: 'binary_sensor.nursery_crying',
@@ -129,5 +130,60 @@ describe('server app', () => {
     expect(known.statusCode).toBe(200)
     expect(known.body).toBe('v=0 answer')
     expect(known.headers['content-type']).toContain('application/sdp')
+  })
+
+  it('reports read-only system settings and a connected Home Assistant', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/system' })
+    expect(res.json()).toEqual({
+      homeAssistant: { url: 'http://ha:8123', status: 'connected' },
+      go2rtc: { url: 'http://go2rtc:1984' },
+    })
+    expect(res.body).not.toContain('secret-token')
+    expect(haFetch).toHaveBeenCalledWith(
+      'http://ha:8123/api/',
+      expect.objectContaining({ headers: { Authorization: 'Bearer secret-token' } }),
+    )
+  })
+
+  it('explains why Home Assistant is not connected', async () => {
+    haFetch.mockResolvedValueOnce(new Response('401: Unauthorized', { status: 401 }))
+    const rejected = await app.inject({ method: 'GET', url: '/api/system' })
+    expect(rejected.json().homeAssistant).toEqual({
+      url: 'http://ha:8123',
+      status: 'error',
+      message: 'Home Assistant rejected the token (check HA_TOKEN)',
+    })
+
+    haFetch.mockRejectedValueOnce(
+      new TypeError('fetch failed', { cause: new Error('connect ECONNREFUSED 10.0.0.2:8123') }),
+    )
+    const unreachable = await app.inject({ method: 'GET', url: '/api/system' })
+    expect(unreachable.json().homeAssistant.message).toBe(
+      "Can't reach Home Assistant: connect ECONNREFUSED 10.0.0.2:8123",
+    )
+
+    haFetch.mockRejectedValueOnce(new TypeError('Bad URL http://user:hunter2@ha:8123/api/'))
+    const invalid = await app.inject({ method: 'GET', url: '/api/system' })
+    expect(invalid.json().homeAssistant.message).toBe("Can't reach Home Assistant: request failed")
+
+    haFetch.mockRejectedValueOnce(new DOMException('The operation timed out', 'TimeoutError'))
+    const slow = await app.inject({ method: 'GET', url: '/api/system' })
+    expect(slow.json().homeAssistant.message).toBe("Can't reach Home Assistant: timed out")
+  })
+
+  it('shows HA_URL without credentials when no token is configured', async () => {
+    const bare = await buildApp({
+      store: new ConfigStore(dir),
+      go2rtc: new Go2rtcClient({ baseUrl: 'http://go2rtc:1984', fetch: go2rtcFetch }),
+      haUrl: 'http://user:hunter2@ha.local:8123/',
+    })
+    const res = await bare.inject({ method: 'GET', url: '/api/system' })
+    await bare.close()
+    expect(res.json().homeAssistant).toEqual({
+      url: 'http://ha.local:8123',
+      status: 'unconfigured',
+      message: 'HA_TOKEN is not set',
+    })
+    expect(res.body).not.toContain('hunter2')
   })
 })

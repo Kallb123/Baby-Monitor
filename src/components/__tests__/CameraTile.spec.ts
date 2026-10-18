@@ -9,7 +9,7 @@ vi.mock('@/composables/useWebRtcStream', () => ({
   useWebRtcStream: () => ({ stream: shallowRef(), status: ref('live'), error: ref(), reconnect }),
 }))
 vi.mock('@/composables/useAudioLevel', () => ({
-  useAudioLevel: () => ({ level: ref(0.5) }),
+  useAudioLevel: () => ({ level: ref(0.5), db: ref(-30.4), status: ref('live') }),
 }))
 
 const camera = {
@@ -127,5 +127,13 @@ describe('CameraTile', () => {
     expect(wrapper.find('.sound-status').text()).toBe('Crying')
     expect(wrapper.attributes('aria-label')).toBe('Nursery, Crying')
     expect(wrapper.text()).toContain('21.5°C')
+  })
+
+  it('shows the level in dB only when asked to', async () => {
+    const wrapper = mount(CameraTile, { props: { camera, states: {}, audioActive: false } })
+    expect(wrapper.find('.decibels').exists()).toBe(false)
+
+    await wrapper.setProps({ showDecibels: true })
+    expect(wrapper.find('.decibels').text()).toBe('-30 dB')
   })
 })

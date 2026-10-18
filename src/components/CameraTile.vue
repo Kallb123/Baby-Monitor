@@ -6,6 +6,7 @@ import type { Camera } from '@shared/config.ts'
 import { useAudioLevel } from '@/composables/useAudioLevel'
 import { useStirring } from '@/composables/useStirring'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
+import { decibelReadout } from '@/lib/audio-level'
 import { formatMeasurement, isCrying } from '@/lib/entities'
 import { soundStatus, soundStatusLabels } from '@/lib/sound-status'
 import AppIcon from './AppIcon.vue'
@@ -23,8 +24,10 @@ const props = withDefaults(
     listenOnTap?: boolean
     /** Edit mode: tapping asks to edit the camera and leaves audio alone. */
     editing?: boolean
+    /** Show the sound level in dBFS next to the meter. */
+    showDecibels?: boolean
   }>(),
-  { compact: false, listenOnTap: false, editing: false },
+  { compact: false, listenOnTap: false, editing: false, showDecibels: false },
 )
 
 const emit = defineEmits<{
@@ -40,7 +43,8 @@ watch(
   () => props.camera.rtspUrl,
   () => void reconnect(),
 )
-const { level } = useAudioLevel(stream)
+const { level, db, status: levelStatus } = useAudioLevel(stream)
+const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
 const { stirring } = useStirring(level)
 
 const entityState = (id: string | undefined) => (id ? props.states[id] : undefined)
@@ -139,6 +143,14 @@ watch([video, () => props.audioActive], ([el, active]) => {
           {{ soundStatusLabels[sound] }}
         </span>
         <LevelMeter class="meter" :level="level" />
+        <span
+          v-if="showDecibels"
+          class="decibels"
+          :class="{ inactive: levelStatus !== 'live' }"
+          title="RMS level in dBFS (0 is the loudest the stream can carry)"
+        >
+          {{ decibels }}
+        </span>
       </div>
     </div>
 
@@ -362,6 +374,26 @@ video {
 
 .compact .meter {
   height: 8px;
+}
+
+.decibels {
+  flex: none;
+  min-width: 56px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--color-text-strong);
+}
+
+.decibels.inactive {
+  color: var(--color-text-muted);
+}
+
+.compact .decibels {
+  min-width: 0;
+  font-size: 12px;
 }
 
 .edit-overlay {

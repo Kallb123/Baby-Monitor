@@ -11,10 +11,12 @@ import { isCrying } from '@/lib/entities'
 import { statusLine } from '@/lib/status-line'
 import { useConfigStore } from '@/stores/config'
 import { useMonitorStore } from '@/stores/monitor'
+import { useSettingsStore } from '@/stores/settings'
 import { referencedEntityIds } from '@shared/config.ts'
 
 const configStore = useConfigStore()
 const monitor = useMonitorStore()
+const settings = useSettingsStore()
 const { states, configured: haConfigured, error: statesError } = useEntityStates()
 
 const CONFIG_RETRY_MS = 5000
@@ -115,6 +117,7 @@ function openAdd() {
         :states="states"
         :audio-camera-id="monitor.audioCameraId"
         :editing="monitor.editing"
+        :show-decibels="settings.showDecibels"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

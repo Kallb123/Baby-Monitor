@@ -14,6 +14,7 @@ const props = defineProps<{
   states: Record<string, EntityState>
   audioCameraId: string | undefined
   editing: boolean
+  showDecibels: boolean
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +61,7 @@ const gridStyle = computed(() => {
       :compact="!!focusId && camera.id !== focusId"
       :listen-on-tap="!!focusId && camera.id !== focusId"
       :editing="editing"
+      :show-decibels="showDecibels"
       @audio="(on) => emit('audio', camera.id, on)"
       @edit="emit('edit', camera.id)"
     />
