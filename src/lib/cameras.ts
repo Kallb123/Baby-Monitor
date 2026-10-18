@@ -6,6 +6,16 @@ export const MAX_CAMERAS = 4
 
 const MAX_ID_LENGTH = 64
 
+/** The cameras a device actually shows, in config order. Unknown hidden ids are ignored. */
+export function visibleCameras<T extends { id: string }>(
+  cameras: readonly T[],
+  hiddenIds: readonly string[],
+): T[] {
+  if (hiddenIds.length === 0) return [...cameras]
+  const hidden = new Set(hiddenIds)
+  return cameras.filter((camera) => !hidden.has(camera.id))
+}
+
 /**
  * Derives a camera id (also the go2rtc stream name) from its display name,
  * unique among `taken`. Matches the id pattern in `shared/config.ts`.

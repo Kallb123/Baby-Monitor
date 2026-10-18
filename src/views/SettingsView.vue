@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, onMounted, useId } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import type { HomeAssistantStatus } from '@shared/api.ts'
 import AppIcon from '@/components/AppIcon.vue'
 import { useSystemInfo } from '@/composables/useSystemInfo'
+import { useConfigStore } from '@/stores/config'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
+const configStore = useConfigStore()
 const { info, error } = useSystemInfo()
 const decibelsLabelId = useId()
+const cameraLabelPrefix = useId()
+
+// This page can be the first one opened (a reload on /settings), before the
+// monitor has loaded the camera list.
+onMounted(() => {
+  if (!configStore.loaded) void configStore.load()
+})
 
 const haStatusLabels: Record<HomeAssistantStatus, string> = {
   connected: 'Connected',
@@ -65,6 +74,44 @@ const homeAssistant = computed(() => {
             <span class="switch-knob" />
           </button>
         </div>
+      </section>
+
+      <section class="card" aria-labelledby="cameras-heading">
+        <h2 id="cameras-heading" class="card-title">Cameras</h2>
+        <p class="card-note">
+          Choose which cameras this device shows. Hidden cameras are not played at all. Saved on
+          this device only.
+        </p>
+
+        <p v-if="!configStore.loaded && configStore.error" class="row empty" role="alert">
+          Can't load the cameras: {{ configStore.error }}
+        </p>
+        <p v-else-if="!configStore.loaded" class="row empty">Loading cameras…</p>
+        <p v-else-if="configStore.config.cameras.length === 0" class="row empty">
+          No cameras yet. Add one from the monitor.
+        </p>
+        <template v-else>
+          <div v-for="camera in configStore.config.cameras" :key="camera.id" class="row">
+            <div class="row-text">
+              <span :id="`${cameraLabelPrefix}-${camera.id}`" class="row-label">{{
+                camera.name
+              }}</span>
+              <span :id="`${cameraLabelPrefix}-${camera.id}-help`" class="row-help">
+                Show on monitor
+              </span>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              role="switch"
+              :aria-checked="!settings.isCameraHidden(camera.id)"
+              :aria-labelledby="`${cameraLabelPrefix}-${camera.id} ${cameraLabelPrefix}-${camera.id}-help`"
+              @click="settings.setCameraHidden(camera.id, !settings.isCameraHidden(camera.id))"
+            >
+              <span class="switch-knob" />
+            </button>
+          </div>
+        </template>
       </section>
 
       <section class="card" aria-labelledby="system-heading">
@@ -198,6 +245,12 @@ const homeAssistant = computed(() => {
 }
 
 .row-help {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.empty {
+  margin: 0;
   font-size: 14px;
   color: var(--color-text-muted);
 }

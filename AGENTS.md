@@ -50,9 +50,16 @@ Data flow:
   open `CameraDialog.vue`, which validates with the shared schema and saves
   the whole config through the config store.
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
-  such as the dB readout, kept in `localStorage` by `useSettingsStore` (not on
-  the server, for the same reason as the layout), plus read-only server
-  settings and a live Home Assistant check from `GET /api/system`.
+  such as the dB readout and which cameras to hide, kept in `localStorage` by
+  `useSettingsStore` (not on the server, for the same reason as the layout),
+  plus read-only server settings and a live Home Assistant check from
+  `GET /api/system`.
+- **Hidden cameras**: `MonitorView.vue` passes the grid only the cameras
+  `visibleCameras()` (`src/lib/cameras.ts`) keeps, so a hidden camera has no
+  tile, no WebRTC connection and no audio tap. Hiding the audio camera stops
+  its audio; a hidden focus camera falls back to the first visible one without
+  overwriting the saved choice. If all are hidden the monitor points to
+  Settings. Ids of deleted cameras are pruned once the config has loaded.
 
 ### API
 

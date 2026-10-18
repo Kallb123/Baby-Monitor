@@ -15,7 +15,8 @@ monitor.
 - Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
   camera.
 - A settings page (the gear in the header) can show each meter's level in
-  decibels (dBFS) on this device, and shows the Home Assistant URL and whether
+  decibels (dBFS) on this device, hide individual cameras from this device's
+  monitor without deleting them, and shows the Home Assistant URL and whether
   the server can reach Home Assistant.
 - Works in portrait and landscape.
 

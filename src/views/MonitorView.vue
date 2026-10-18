@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import CameraDialog from '@/components/CameraDialog.vue'
 import CameraGrid from '@/components/CameraGrid.vue'
 import MonitorHeader from '@/components/MonitorHeader.vue'
 import { useEntityStates } from '@/composables/useEntityStates'
 import { audioUnlocked } from '@/lib/audio-context'
-import { MAX_CAMERAS } from '@/lib/cameras'
+import { MAX_CAMERAS, visibleCameras } from '@/lib/cameras'
 import { isCrying } from '@/lib/entities'
 import { statusLine } from '@/lib/status-line'
 import { useConfigStore } from '@/stores/config'
@@ -38,10 +39,33 @@ watch(
 
 onUnmounted(() => clearTimeout(configRetry))
 
+/** Every configured camera, including ones this device hides. */
 const cameras = computed(() => configStore.config.cameras)
+/** What the grid shows. Hidden cameras get no tile, so no stream is opened for them. */
+const visible = computed(() => visibleCameras(cameras.value, settings.hiddenCameraIds))
+const allHidden = computed(() => cameras.value.length > 0 && visible.value.length === 0)
 const layoutMode = computed(() => monitor.layoutMode ?? configStore.config.layout.mode)
 const focusCameraId = computed(
   () => monitor.focusCameraId ?? configStore.config.layout.focusCameraId,
+)
+
+// Hiding the camera that is playing must stop its audio, as deleting it does;
+// otherwise it would start again by itself when the camera is shown again.
+// A hidden focus camera needs no handling: the grid falls back to the first
+// visible one and the saved choice returns when the camera does.
+watch(visible, (now) => {
+  if (monitor.audioCameraId && !now.some((c) => c.id === monitor.audioCameraId)) monitor.stopAudio()
+  if (now.length === 0) monitor.setEditing(false)
+})
+
+// Forget hidden ids of deleted cameras, but only once the real config is in:
+// the empty default must not wipe the list.
+watch(
+  () => configStore.loaded && cameras.value.map((c) => c.id),
+  (ids) => {
+    if (ids) settings.pruneHiddenCameras(ids)
+  },
+  { immediate: true },
 )
 
 /** Dialog state: `null` closed, `{}` adding, `{ cameraId }` editing. */
@@ -50,12 +74,13 @@ const dialog = ref<{ cameraId?: string } | null>(null)
 const status = computed(() =>
   statusLine({
     editing: monitor.editing,
-    cryingNames: cameras.value
+    cryingNames: visible.value
       .filter((c) => isCrying(c.entities.cry ? states.value[c.entities.cry] : undefined))
       .map((c) => c.name),
-    listeningName: cameras.value.find((c) => c.id === monitor.audioCameraId)?.name,
+    listeningName: visible.value.find((c) => c.id === monitor.audioCameraId)?.name,
     audioUnlocked: audioUnlocked.value,
-    hasCameras: cameras.value.length > 0,
+    hasCameras: visible.value.length > 0,
+    allHidden: allHidden.value,
   }),
 )
 
@@ -73,7 +98,7 @@ function onAudio(cameraId: string, on: boolean) {
 }
 
 function toggleEdit() {
-  monitor.setEditing(!monitor.editing && cameras.value.length > 0)
+  monitor.setEditing(!monitor.editing && visible.value.length > 0)
 }
 
 function openAdd() {
@@ -88,7 +113,7 @@ function openAdd() {
       :notice="notice"
       :layout-mode="layoutMode"
       :editing="monitor.editing"
-      :can-edit="cameras.length > 0"
+      :can-edit="visible.length > 0"
       :can-add="configStore.loaded && cameras.length < MAX_CAMERAS"
       @layout="monitor.setLayout"
       @toggle-edit="toggleEdit"
@@ -109,9 +134,17 @@ function openAdd() {
         </button>
       </div>
 
+      <div v-else-if="configStore.loaded && allHidden" class="card">
+        <h2 class="card-title">All cameras are hidden</h2>
+        <p class="card-body">
+          This device is set to hide every camera. Choose which to show in Settings.
+        </p>
+        <RouterLink to="/settings" class="btn btn-primary card-action">Open settings</RouterLink>
+      </div>
+
       <CameraGrid
         v-else-if="configStore.loaded"
-        :cameras="cameras"
+        :cameras="visible"
         :mode="layoutMode"
         :focus-camera-id="focusCameraId"
         :states="states"
