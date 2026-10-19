@@ -24,7 +24,7 @@ monitor.
   app is visible on supported browsers.
 
 > **Status:** foundation. The app shell, config persistence, layouts, level
-> meters, Home Assistant polling and WebRTC playback via go2rtc are in place.
+> meters, live Home Assistant updates and WebRTC playback via go2rtc are in place.
 > See [Roadmap](#roadmap) for what's next.
 
 ## How it works
@@ -37,7 +37,7 @@ monitor.
                     │                                - level meter (Web Audio)
               Node server (Fastify) ◄──── /api ────  - cry / temp overlays
               - config.json on disk
-              - Home Assistant proxy ──► Home Assistant REST API
+              - Home Assistant proxy ◄──► Home Assistant WebSocket / REST API
 ```
 
 - **Browsers cannot play RTSP.** [go2rtc](https://github.com/AlexxIT/go2rtc)
@@ -52,6 +52,16 @@ monitor.
 - **Cry detection** comes from a Home Assistant `binary_sensor` per camera
   (`on` = crying), for example from a cry-detection integration or an audio
   classifier you already run in HA.
+- **Sensor updates** arrive over a shared Home Assistant WebSocket connection
+  using `subscribe_entities`, filtered by the configured entity IDs in HA,
+  and are pushed to browsers through server-sent events (`/api/ha/events`). Each
+  viewer gets a fresh snapshot on connection. If either connection fails or
+  stalls, the browser polls `/api/ha/states` every three seconds while retrying
+  the live stream with exponential retry delays from three seconds to one minute,
+  then stops polling once live updates resume. Connection failures log a safe
+  phase and reason on the server; rejected tokens point to `HA_TOKEN`. Reverse proxies
+  must allow long-lived SSE responses without buffering; the server sends a
+  heartbeat every 15 seconds and sets `X-Accel-Buffering: no`.
 
 ## Requirements
 
@@ -215,8 +225,6 @@ This is designed for a trusted home network.
 
 ## Roadmap
 
-- Push Home Assistant updates to clients via the HA WebSocket API and
-  server-sent events instead of polling.
 - Local, in-browser cry detection fallback from the audio level.
 - Remove go2rtc streams for deleted cameras.
 - Optional app login / PIN.

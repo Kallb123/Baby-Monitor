@@ -1,4 +1,4 @@
-/** Wire types for the server's REST API, shared by client and server. */
+/** Wire types for the server's REST API and SSE snapshots, shared by client and server. */
 
 export interface EntityState {
   entityId: string

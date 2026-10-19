@@ -12,6 +12,7 @@ import type {
 } from '../shared/api.ts'
 import { referencedEntityIds } from '../shared/config.ts'
 import type { ConfigStore } from './config-store.ts'
+import { EntityStateStream } from './entity-state-stream.ts'
 import type { Go2rtcClient } from './go2rtc.ts'
 import type { HomeAssistantClient } from './home-assistant.ts'
 
@@ -50,6 +51,17 @@ async function homeAssistantInfo(deps: AppDeps): Promise<SystemInfoResponse['hom
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? false })
+  const entityStream = new EntityStateStream(deps.homeAssistant, (failure) => {
+    app.log.warn(
+      failure,
+      failure.reason === 'auth_invalid'
+        ? 'Home Assistant rejected the WebSocket token (check HA_TOKEN)'
+        : 'Home Assistant live updates unavailable',
+    )
+  })
+  entityStream.setEntities(referencedEntityIds(await deps.store.load()))
+  // preClose runs before Fastify waits for the long-lived SSE responses to finish.
+  app.addHook('preClose', async () => entityStream.close())
 
   app.addContentTypeParser('application/sdp', { parseAs: 'string' }, (_req, body, done) => {
     done(null, body)
@@ -88,6 +100,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.put('/api/config', async (request) => {
     const config = await deps.store.save(request.body)
+    entityStream.setEntities(referencedEntityIds(config))
     // Stream registration is best-effort: the config is already saved, and
     // go2rtc may simply not be running yet. The client retries playback.
     deps.go2rtc.syncStreams(config.cameras).catch((error: unknown) => {
@@ -105,6 +118,36 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       request.log.warn({ err: errors[0], failed: errors.length }, 'Home Assistant fetch failed')
     }
     return { configured: true, states }
+  })
+
+  app.get('/api/ha/events', (_request, reply) => {
+    reply.hijack()
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write('retry: 3000\n\n')
+    const write = (frame: string) => {
+      if (reply.raw.destroyed || reply.raw.writableEnded) return
+      // Disconnect a stalled viewer rather than buffering updates indefinitely.
+      if (reply.raw.writableLength > 1024 * 1024) reply.raw.destroy()
+      else reply.raw.write(frame)
+    }
+    const heartbeat = setInterval(() => write('event: heartbeat\ndata: {}\n\n'), 15_000)
+    const unsubscribe = entityStream.subscribe(
+      (response) => write(`data: ${JSON.stringify(response)}\n\n`),
+      () => {
+        // A stalled socket may never emit close after end, so stop writing now.
+        clearInterval(heartbeat)
+        if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end()
+      },
+    )
+    reply.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
   })
 
   /** WebRTC signalling: body is the browser's SDP offer, response is go2rtc's SDP answer. */
