@@ -1,5 +1,5 @@
 import type { EntityStatesResponse } from '../shared/api.ts'
-import type { HomeAssistantClient } from './home-assistant.ts'
+import type { HomeAssistantClient, HomeAssistantStreamFailure } from './home-assistant.ts'
 
 interface Subscriber {
   send: (response: EntityStatesResponse) => void
@@ -10,12 +10,17 @@ interface Subscriber {
 export class EntityStateStream {
   readonly #homeAssistant: HomeAssistantClient | undefined
   readonly #subscribers = new Set<Subscriber>()
+  readonly #onUnavailable: (failure: HomeAssistantStreamFailure) => void
   #entityIds: string[] = []
   #snapshot: EntityStatesResponse | undefined
   #stop: (() => void) | undefined
 
-  constructor(homeAssistant?: HomeAssistantClient) {
+  constructor(
+    homeAssistant?: HomeAssistantClient,
+    onUnavailable: (failure: HomeAssistantStreamFailure) => void = () => {},
+  ) {
     this.#homeAssistant = homeAssistant
+    this.#onUnavailable = onUnavailable
   }
 
   setEntities(ids: string[]) {
@@ -35,7 +40,10 @@ export class EntityStateStream {
       this.#stop = this.#homeAssistant.watchStates(
         this.#entityIds,
         (states) => this.#publish({ configured: true, states }),
-        () => this.close(),
+        (failure) => {
+          this.#onUnavailable(failure)
+          this.close()
+        },
       )
     }
     return () => {

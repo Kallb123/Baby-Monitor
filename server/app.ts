@@ -51,7 +51,14 @@ async function homeAssistantInfo(deps: AppDeps): Promise<SystemInfoResponse['hom
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? false })
-  const entityStream = new EntityStateStream(deps.homeAssistant)
+  const entityStream = new EntityStateStream(deps.homeAssistant, (failure) => {
+    app.log.warn(
+      failure,
+      failure.reason === 'auth_invalid'
+        ? 'Home Assistant rejected the WebSocket token (check HA_TOKEN)'
+        : 'Home Assistant live updates unavailable',
+    )
+  })
   entityStream.setEntities(referencedEntityIds(await deps.store.load()))
   // preClose runs before Fastify waits for the long-lived SSE responses to finish.
   app.addHook('preClose', async () => entityStream.close())
@@ -123,14 +130,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     })
     reply.raw.write('retry: 3000\n\n')
     const write = (frame: string) => {
+      if (reply.raw.destroyed || reply.raw.writableEnded) return
       // Disconnect a stalled viewer rather than buffering updates indefinitely.
       if (reply.raw.writableLength > 1024 * 1024) reply.raw.destroy()
-      else if (!reply.raw.destroyed) reply.raw.write(frame)
+      else reply.raw.write(frame)
     }
     const heartbeat = setInterval(() => write('event: heartbeat\ndata: {}\n\n'), 15_000)
     const unsubscribe = entityStream.subscribe(
       (response) => write(`data: ${JSON.stringify(response)}\n\n`),
-      () => reply.raw.end(),
+      () => {
+        // A stalled socket may never emit close after end, so stop writing now.
+        clearInterval(heartbeat)
+        if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end()
+      },
     )
     reply.raw.on('close', () => {
       clearInterval(heartbeat)

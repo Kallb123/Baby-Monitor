@@ -143,7 +143,7 @@ describe('server app', () => {
     second.stream().on('data', (chunk) => (secondData += String(chunk)))
     await vi.advanceTimersByTimeAsync(15_000)
     expect(secondData).toContain('event: heartbeat\ndata: {}\n\n')
-    watch.mock.lastCall![2]()
+    watch.mock.lastCall![2]({ phase: 'live', reason: 'socket_error' })
     await vi.advanceTimersByTimeAsync(0)
     expect(res.raw.res.writableEnded).toBe(true)
     expect(second.raw.res.writableEnded).toBe(true)
@@ -169,6 +169,90 @@ describe('server app', () => {
     expect(third.raw.res.writableEnded).toBe(true)
     expect(stop).toHaveBeenCalledTimes(3)
     expect(watch).toHaveBeenCalledTimes(3)
+  })
+
+  it.each(['HA failure', 'config change', 'shutdown'])(
+    'stops heartbeat writes before ending a stalled viewer on %s',
+    async (cause) => {
+      const watch = vi.spyOn(HomeAssistantClient.prototype, 'watchStates').mockReturnValue(vi.fn())
+      await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+      vi.useFakeTimers()
+      const res = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+      // Model a socket whose end is queued but cannot flush or emit close yet.
+      const end = vi.spyOn(res.raw.res, 'end').mockImplementation(() => {
+        Object.defineProperty(res.raw.res, 'writableEnded', { value: true, configurable: true })
+        return res.raw.res
+      })
+      const write = vi.spyOn(res.raw.res, 'write')
+      let shutdown: Promise<void> | undefined
+      let update: Promise<unknown> | undefined
+      try {
+        if (cause === 'HA failure') {
+          watch.mock.lastCall![2]({ phase: 'live', reason: 'socket_closed' })
+        } else if (cause === 'config change') {
+          update = app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [] } })
+        } else {
+          shutdown = app.close()
+        }
+        await vi.waitFor(() => expect(end).toHaveBeenCalledOnce())
+        await vi.advanceTimersByTimeAsync(0)
+        await update
+        expect(res.raw.res.destroyed).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(write).not.toHaveBeenCalled()
+      } finally {
+        end.mockRestore()
+        res.raw.res.destroy()
+        await update
+        await shutdown
+      }
+    },
+  )
+
+  it('does not write a heartbeat to an already ended response before close fires', async () => {
+    vi.useFakeTimers()
+    const res = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    const write = vi.spyOn(res.raw.res, 'write')
+    Object.defineProperty(res.raw.res, 'writableEnded', { value: true, configurable: true })
+    try {
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(res.raw.res.destroyed).toBe(false)
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      res.raw.res.destroy()
+    }
+  })
+
+  it('destroys viewers that buffer over 1 MiB and releases their subscription and heartbeat', async () => {
+    const stop = vi.fn<() => void>()
+    const watch = vi.spyOn(HomeAssistantClient.prototype, 'watchStates').mockReturnValue(stop)
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+    vi.useFakeTimers()
+    const res = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    Object.defineProperty(res.raw.res, 'writableLength', { value: 1024 * 1024 + 1 })
+    const write = vi.spyOn(res.raw.res, 'write')
+    watch.mock.lastCall![1]({})
+    await vi.advanceTimersByTimeAsync(0)
+    expect(res.raw.res.destroyed).toBe(true)
+    expect(write).not.toHaveBeenCalled()
+    expect(stop).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('logs a safe phase and actionable authentication failure through the app logger', async () => {
+    const watch = vi.spyOn(HomeAssistantClient.prototype, 'watchStates').mockReturnValue(vi.fn())
+    const warn = vi.spyOn(app.log, 'warn')
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+    await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    watch.mock.lastCall![2]({ phase: 'authenticating', reason: 'auth_invalid' })
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      { phase: 'authenticating', reason: 'auth_invalid' },
+      'Home Assistant rejected the WebSocket token (check HA_TOKEN)',
+    )
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('secret-token')
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('http://ha:8123')
   })
 
   it('streams an empty unconfigured snapshot without leaking secrets or polling HA', async () => {

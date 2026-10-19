@@ -93,6 +93,25 @@ describe('useEntityStates', () => {
     expect(vi.getTimerCount()).toBe(1)
   })
 
+  it('backs off repeated SSE failures to one minute while REST polling continues', async () => {
+    start()
+    for (const delay of [3000, 6000, 12_000, 24_000, 48_000, 60_000, 60_000]) {
+      const attempts = FakeEventSource.instances.length
+      latest().onerror?.()
+      await vi.advanceTimersByTimeAsync(delay - 1)
+      expect(FakeEventSource.instances).toHaveLength(attempts)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(FakeEventSource.instances).toHaveLength(attempts + 1)
+    }
+    expect(vi.mocked(fetchEntityStates).mock.calls.length).toBeGreaterThan(60)
+    // A successful snapshot restores the short retry for the next isolated outage.
+    latest().snapshot('on')
+    latest().onerror?.()
+    const attempts = FakeEventSource.instances.length
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(FakeEventSource.instances).toHaveLength(attempts + 1)
+  })
+
   it.each(['initial snapshot', 'heartbeat'])('falls back when the %s stalls', async (stage) => {
     start()
     if (stage === 'heartbeat') latest().snapshot()

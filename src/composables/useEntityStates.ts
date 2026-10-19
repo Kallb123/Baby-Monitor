@@ -17,6 +17,7 @@ export function useEntityStates(intervalMs = 3000) {
   let polling = false
   let disposed = false
   let revision = 0
+  let retryMs = intervalMs
 
   function adopt(response: EntityStatesResponse) {
     states.value = response.states
@@ -53,7 +54,10 @@ export function useEntityStates(intervalMs = 3000) {
       void poll()
     }
     clearTimeout(retryTimer)
-    if (typeof EventSource !== 'undefined') retryTimer = setTimeout(connect, intervalMs)
+    if (typeof EventSource !== 'undefined') {
+      retryTimer = setTimeout(connect, retryMs)
+      retryMs = Math.min(retryMs * 2, 60_000)
+    }
   }
 
   function armWatchdog(timeoutMs: number) {
@@ -77,6 +81,7 @@ export function useEntityStates(intervalMs = 3000) {
           if (typeof response.configured !== 'boolean' || !response.states) return fallback()
           revision++
           ready = true
+          retryMs = intervalMs
           polling = false
           clearTimeout(pollTimer)
           request?.abort()

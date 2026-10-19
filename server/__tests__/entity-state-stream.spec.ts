@@ -38,7 +38,7 @@ describe('shared entity state stream', () => {
   it('closes viewers on upstream failure so they can poll and reconnect', () => {
     const close = vi.fn<() => void>()
     stream.subscribe(vi.fn(), close)
-    watch.mock.lastCall![2]()
+    watch.mock.lastCall![2]({ phase: 'live', reason: 'socket_error' })
     expect(close).toHaveBeenCalledOnce()
     expect(stop).toHaveBeenCalledOnce()
     stream.subscribe(vi.fn(), vi.fn())()

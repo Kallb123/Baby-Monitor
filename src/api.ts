@@ -16,16 +16,26 @@ const REQUEST_TIMEOUT_MS = 10_000
 
 // A timeout matters on flaky tablet Wi-Fi: a hung request must not stall polling forever.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-  const response = await fetch(path, {
-    ...init,
-    signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
-  })
-  if (!response.ok) {
-    const body = (await response.json().catch(() => undefined)) as ApiError | undefined
-    throw new ApiRequestError(response.status, body)
+  const controller = new AbortController()
+  const abort = () => controller.abort(init?.signal?.reason)
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('Request timed out', 'TimeoutError')),
+    REQUEST_TIMEOUT_MS,
+  )
+  // Link cancellation manually for tablets that do not support AbortSignal.any.
+  init?.signal?.addEventListener('abort', abort, { once: true })
+  if (init?.signal?.aborted) abort()
+  try {
+    const response = await fetch(path, { ...init, signal: controller.signal })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => undefined)) as ApiError | undefined
+      throw new ApiRequestError(response.status, body)
+    }
+    return (await response.json()) as T
+  } finally {
+    clearTimeout(timer)
+    init?.signal?.removeEventListener('abort', abort)
   }
-  return (await response.json()) as T
 }
 
 export function fetchConfig(): Promise<AppConfig> {

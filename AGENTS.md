@@ -38,10 +38,13 @@ Data flow:
   the `<video>` element's `muted` flag, driven by `useMonitorStore().audioCameraId`.
 - **Home Assistant**: the server holds `HA_TOKEN` and exposes
   `GET /api/ha/states`, which returns only the entities referenced in the saved
-  config (`server/home-assistant.ts`). A shared HA WebSocket subscription feeds
+  config (`server/home-assistant.ts`). A shared HA WebSocket `subscribe_entities`
+  subscription, filtered by entity IDs on HA, feeds
   `GET /api/ha/events` over SSE (`server/entity-state-stream.ts`). The client
   reconnects and polls the REST endpoint only while SSE is unavailable
-  (`src/composables/useEntityStates.ts`). Both connections have heartbeat watchdogs.
+  (`src/composables/useEntityStates.ts`). SSE retries back off from 3 to 60 seconds;
+  both connections have heartbeat watchdogs. WebSocket failures log only a local
+  phase and reason, never HA payloads, URLs or tokens.
 - **Layout**: `src/lib/layout.ts` picks the grid shape that maximises tile area
   for the container size, so orientation is handled without special cases.
   The `focus` layout uses CSS orientation media queries. The layout mode and

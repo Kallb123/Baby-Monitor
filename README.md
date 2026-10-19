@@ -53,10 +53,13 @@ monitor.
   (`on` = crying), for example from a cry-detection integration or an audio
   classifier you already run in HA.
 - **Sensor updates** arrive over a shared Home Assistant WebSocket connection
+  using `subscribe_entities`, filtered by the configured entity IDs in HA,
   and are pushed to browsers through server-sent events (`/api/ha/events`). Each
   viewer gets a fresh snapshot on connection. If either connection fails or
   stalls, the browser polls `/api/ha/states` every three seconds while retrying
-  the live stream, then stops polling once live updates resume. Reverse proxies
+  the live stream with exponential retry delays from three seconds to one minute,
+  then stops polling once live updates resume. Connection failures log a safe
+  phase and reason on the server; rejected tokens point to `HA_TOKEN`. Reverse proxies
   must allow long-lived SSE responses without buffering; the server sends a
   heartbeat every 15 seconds and sets `X-Accel-Buffering: no`.
 
