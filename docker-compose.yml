@@ -40,11 +40,12 @@ services:
     env_file:
       - path: .env
         required: false
-    # Overrides .env: these values must match the other services and volumes.
+    # Keep the app URL in sync with the bundled go2rtc API port unless an
+    # external go2rtc URL is explicitly supplied. DATA_DIR matches the volume.
     environment:
       PORT: ${PORT:-3000}
       DATA_DIR: /data
-      GO2RTC_URL: http://localhost:1984
+      GO2RTC_URL: ${GO2RTC_URL:-http://localhost:${GO2RTC_API_PORT:-1984}}
       HA_URL: ${HA_URL:-http://localhost:8123}
       HA_TOKEN: ${HA_TOKEN:-}
     volumes:
@@ -78,14 +79,16 @@ services:
       # so it lives in a Docker volume rather than the git working tree.
       - go2rtc-config:/config
     healthcheck:
-      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:1984/api']
+      test:
+        ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:${GO2RTC_API_PORT:-1984}/api']
       interval: 10s
       timeout: 3s
       start_period: 5s
       retries: 5
 
   # Fake RTSP camera (test pattern + a swelling tone) for trying the app
-  # without hardware. Add a camera with RTSP URL rtsp://localhost:8654/demo.
+  # without hardware. Add rtsp://localhost:<DEMO_RTSP_PORT>/demo as a camera
+  # (port 8654 by default). localhost is resolved by go2rtc, not the browser.
   demo-camera:
     profiles: [demo]
     image: alexxit/go2rtc:1.9.14
@@ -116,18 +119,18 @@ configs:
       # Loaded after /config/go2rtc.yaml, so these settings always win.
       api:
         # Keep this on the LAN only: the go2rtc API has no authentication.
-        listen: ':1984'
+        listen: ':${GO2RTC_API_PORT:-1984}'
       rtsp:
-        listen: ':8554'
+        listen: ':${GO2RTC_RTSP_PORT:-8554}'
       webrtc:
-        listen: ':8555'
+        listen: ':${GO2RTC_WEBRTC_PORT:-8555}'
 
   demo-camera:
     content: |
       api:
-        listen: ':1985'
+        listen: ':${DEMO_API_PORT:-1985}'
       rtsp:
-        listen: ':8654'
+        listen: ':${DEMO_RTSP_PORT:-8654}'
       webrtc:
         listen: ''
       streams:

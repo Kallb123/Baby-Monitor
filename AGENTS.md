@@ -182,13 +182,17 @@ commits and PR descriptions are written in normal prose.
   server re-registers all cameras on startup and on every config save. go2rtc
   also writes those streams (with RTSP credentials) into its config file, which
   is why Compose keeps it in the `go2rtc-config` volume. Compose layers a fixed
-  base config over that file so ports can't drift.
+  base config over that file so ports can't drift. Pipeline ports come from
+  `.env` (see `.env.example`); `GO2RTC_API_PORT` also drives the app's default
+  go2rtc URL and the go2rtc health check. `GO2RTC_URL` explicitly overrides
+  only the app's connection URL for an external instance.
 - Every push to `main` builds the app image for amd64 and arm64 and pushes it
   to `ghcr.io/kallb123/baby-monitor` (`.github/workflows/docker.yml`), tagged
   `latest` and `sha-<commit>`. Compose uses that image and keeps `build: .`
   so `up --build` still runs local changes.
 - `docker compose --profile demo` adds a fake H.264 + Opus camera at
-  `rtsp://localhost:8654/demo` for end-to-end testing without hardware.
+  `rtsp://localhost:8654/demo` for end-to-end testing without hardware (use
+  `DEMO_RTSP_PORT` instead of 8654 if changed).
 - go2rtc does not transcode for WebRTC, and if the browser can't take the
   source's video codec, negotiation fails entirely (audio included). In
   testing with go2rtc 1.9.14 even a VP8 source failed against Playwright's

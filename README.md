@@ -101,6 +101,27 @@ below.
 | `demo-camera`   | `demo`          | 1985 API, 8654 RTSP              | Fake camera: test pattern + tone         |
 | `homeassistant` | `homeassistant` | 8123                             | Bundled Home Assistant, if you have none |
 
+These are the default ports. To avoid conflicts with existing services, edit
+`.env` instead of the Compose file. For example, if 8554 is already occupied:
+
+```dotenv
+GO2RTC_RTSP_PORT=9554
+```
+
+Then run `docker compose up -d` again. The pipeline supports `PORT` (the app),
+`GO2RTC_API_PORT`, `GO2RTC_RTSP_PORT`, `GO2RTC_WEBRTC_PORT`, `DEMO_API_PORT`, and
+`DEMO_RTSP_PORT`. Changing `GO2RTC_API_PORT` updates the go2rtc listener, health
+check, and the app's API URL together. The browser negotiates streams through
+the app, so it needs no separate port setting. Allow the configured WebRTC port
+over **TCP and UDP** from viewing devices. Saved go2rtc streams survive port
+changes; the environment-driven base config takes precedence over saved listener
+settings.
+
+`GO2RTC_URL` is an optional app connection override for an external go2rtc API.
+Leave it unset for the bundled pipeline to follow `GO2RTC_API_PORT`. If an older
+`.env` contains `GO2RTC_URL=http://localhost:1984`, remove that line before changing
+`GO2RTC_API_PORT`. An explicit URL does not change or stop the bundled go2rtc.
+
 Turn on the optional services with `--profile` (repeat it to combine), or
 list them in `COMPOSE_PROFILES` in `.env`. A `--profile` flag replaces the
 `.env` list rather than adding to it. Requires Docker Compose 2.23.1+.
@@ -113,11 +134,18 @@ docker compose --profile demo up -d
 docker compose --profile homeassistant up -d
 ```
 
+If you change `DEMO_RTSP_PORT`, use that port in the demo camera's saved RTSP URL
+as well, including updating an already-added camera. Real camera RTSP URLs are
+independent of the pipeline's listener ports and do not need changing.
+
 With the bundled Home Assistant, finish onboarding at `http://<host>:8123`,
 create a long-lived access token (profile → Security), put it in `.env` as
 `HA_TOKEN=…` (leave `HA_URL` unset; it defaults to `http://localhost:8123`),
 then run the same `docker compose … up -d` again. Containers read `.env`
 when they are created, so `docker compose restart` won't pick it up.
+The optional bundled Home Assistant manages its own HTTP port in its persisted
+`configuration.yaml` (`http.server_port`); if you change that, set `HA_URL` to
+match. `HA_URL` alone only changes where the app connects.
 
 App config and go2rtc's saved streams live in the `baby-monitor-data` and
 `go2rtc-config` Docker volumes, so they survive rebuilds and never land in
@@ -194,13 +222,22 @@ Outside Docker, config is saved to `data/config.json` (git-ignored).
 
 Server settings come from environment variables (see `.env.example`):
 
-| Variable        | Default                 | Purpose                                |
-| --------------- | ----------------------- | -------------------------------------- |
-| `HA_URL`        | –                       | Home Assistant base URL                |
-| `HA_TOKEN`      | –                       | Home Assistant long-lived access token |
-| `GO2RTC_URL`    | `http://localhost:1984` | go2rtc API                             |
-| `PORT` / `HOST` | `3000` / `0.0.0.0`      | API server bind address                |
-| `DATA_DIR`      | `./data`                | Where `config.json` is stored          |
+| Variable             | Default                               | Purpose                                                     |
+| -------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| `HA_URL`             | –                                     | Home Assistant base URL                                     |
+| `HA_TOKEN`           | –                                     | Home Assistant long-lived access token                      |
+| `GO2RTC_URL`         | `http://localhost:${GO2RTC_API_PORT}` | Optional explicit go2rtc API URL override                   |
+| `GO2RTC_API_PORT`    | `1984`                                | Bundled go2rtc API listener and default app connection port |
+| `GO2RTC_RTSP_PORT`   | `8554`                                | Bundled go2rtc RTSP listener (Compose)                      |
+| `GO2RTC_WEBRTC_PORT` | `8555`                                | Bundled go2rtc WebRTC listener, TCP + UDP (Compose)         |
+| `DEMO_API_PORT`      | `1985`                                | Optional demo camera API listener (Compose)                 |
+| `DEMO_RTSP_PORT`     | `8654`                                | Optional demo camera RTSP listener (Compose)                |
+| `PORT` / `HOST`      | `3000` / `0.0.0.0`                    | API server bind address                                     |
+| `DATA_DIR`           | `./data`                              | Where `config.json` is stored                               |
+
+Outside Compose, configure go2rtc's listeners in its own config to match;
+the Node server uses `GO2RTC_API_PORT` to derive its default connection URL but
+does not configure a separately running go2rtc process.
 
 Everything else (cameras, entities, layout) is edited in the app and persisted
 by the server. The settings page shows `HA_URL` and `GO2RTC_URL` read-only,

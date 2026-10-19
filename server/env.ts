@@ -32,6 +32,9 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ServerEnv {
     clientDir: resolve(env.CLIENT_DIR ?? 'dist'),
     haUrl: env.HA_URL?.replace(/\/+$/, '') || undefined,
     haToken: env.HA_TOKEN || undefined,
-    go2rtcUrl: (env.GO2RTC_URL ?? 'http://localhost:1984').replace(/\/+$/, ''),
+    go2rtcUrl: (env.GO2RTC_URL || `http://localhost:${env.GO2RTC_API_PORT || 1984}`).replace(
+      /\/+$/,
+      '',
+    ),
   }
 }
