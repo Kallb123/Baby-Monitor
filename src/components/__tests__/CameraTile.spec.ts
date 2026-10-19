@@ -2,11 +2,20 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, shallowRef } from 'vue'
 
+import type { StreamDetails } from '@/lib/stream-details'
 import CameraTile from '../CameraTile.vue'
 
+const details = shallowRef<StreamDetails>({})
+const streamStatus = ref('live')
 const reconnect = vi.fn<() => Promise<void>>(() => Promise.resolve())
 vi.mock('@/composables/useWebRtcStream', () => ({
-  useWebRtcStream: () => ({ stream: shallowRef(), status: ref('live'), error: ref(), reconnect }),
+  useWebRtcStream: () => ({
+    stream: shallowRef(),
+    status: streamStatus,
+    details,
+    error: ref(),
+    reconnect,
+  }),
 }))
 vi.mock('@/composables/useAudioLevel', () => ({
   useAudioLevel: () => ({ level: ref(0.5), db: ref(-30.4), status: ref('live') }),
@@ -21,6 +30,8 @@ const camera = {
 
 describe('CameraTile', () => {
   beforeEach(() => {
+    details.value = {}
+    streamStatus.value = 'live'
     HTMLMediaElement.prototype.play = vi.fn<HTMLMediaElement['play']>(() => Promise.resolve())
   })
 
@@ -135,5 +146,32 @@ describe('CameraTile', () => {
 
     await wrapper.setProps({ showDecibels: true })
     expect(wrapper.find('.decibels').text()).toBe('-30 dB')
+  })
+
+  it('shows current stream details only when enabled and live, including compact tiles', async () => {
+    details.value = {
+      resolution: '1920 × 1080',
+      framesPerSecond: 30,
+      videoCodec: 'H264',
+      audioCodec: 'OPUS',
+    }
+    const wrapper = mount(CameraTile, { props: { camera, states: {}, audioActive: false } })
+    expect(wrapper.find('.stream-details').exists()).toBe(false)
+    await wrapper.setProps({ showStreamDetails: true })
+    const overlay = wrapper.get('.stream-details')
+    expect(overlay.text()).toContain('1920 × 1080 · 30 fps · H264')
+    expect(overlay.text()).toContain('Audio: OPUS')
+    await wrapper.setProps({ compact: true })
+    expect(overlay.text()).toContain('1920×1080 · H264')
+    expect(overlay.text()).toContain('OPUS · 30 fps')
+    await wrapper.setProps({ compact: false })
+    details.value = {}
+    await flushPromises()
+    expect(overlay.text()).toContain('Video: — · — · —')
+    expect(overlay.text()).toContain('Audio: —')
+    streamStatus.value = 'error'
+    await flushPromises()
+    expect(wrapper.find('.stream-details').exists()).toBe(false)
+    wrapper.unmount()
   })
 })

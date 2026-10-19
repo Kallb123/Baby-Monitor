@@ -26,6 +26,26 @@ describe('settings store', () => {
     expect(useSettingsStore().showDecibels).toBe(false)
   })
 
+  it('hides stream details in older saves and persists them alongside other settings', async () => {
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true,"hiddenCameraIds":["cot"]}')
+    const settings = useSettingsStore()
+    expect(settings.showStreamDetails).toBe(false)
+    settings.setShowStreamDetails(true)
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.showStreamDetails).toBe(true)
+    expect(reloaded.showDecibels).toBe(true)
+    expect(reloaded.hiddenCameraIds).toEqual(['cot'])
+
+    reloaded.setShowDecibels(false)
+    reloaded.setCameraHidden('nursery', true)
+    await nextTick()
+    setActivePinia(createPinia())
+    expect(useSettingsStore().showStreamDetails).toBe(true)
+  })
+
   it('hides no cameras by default', () => {
     const settings = useSettingsStore()
     expect(settings.hiddenCameraIds).toEqual([])
@@ -61,6 +81,7 @@ describe('settings store', () => {
     await nextTick()
     expect(JSON.parse(localStorage.getItem('baby-monitor:settings') ?? '{}')).toEqual({
       showDecibels: true,
+      showStreamDetails: false,
       hiddenCameraIds: ['nursery'],
     })
 

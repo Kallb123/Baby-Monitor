@@ -1,6 +1,7 @@
 import { onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue'
 
 import { negotiateWebRtc } from '@/api'
+import { readStreamDetails, type StreamDetails } from '@/lib/stream-details'
 
 export type StreamStatus = 'connecting' | 'live' | 'error'
 
@@ -32,10 +33,11 @@ function iceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
  * Receives one camera's audio + video from go2rtc over WebRTC, reconnecting
  * with exponential backoff when the connection drops.
  */
-export function useWebRtcStream(cameraId: Ref<string>) {
+export function useWebRtcStream(cameraId: Ref<string>, showDetails: Ref<boolean> = ref(false)) {
   const stream = shallowRef<MediaStream>()
   const status = ref<StreamStatus>('connecting')
   const error = ref<string>()
+  const details = shallowRef<StreamDetails>({})
 
   let pc: RTCPeerConnection | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -51,6 +53,7 @@ export function useWebRtcStream(cameraId: Ref<string>) {
     watchdog = undefined
     pc?.close()
     pc = undefined
+    details.value = {}
   }
 
   function scheduleRetry(gen: number, minDelay = 0) {
@@ -73,6 +76,7 @@ export function useWebRtcStream(cameraId: Ref<string>) {
     watchdog = setInterval(async () => {
       const stats = await peer.getStats().catch(() => undefined)
       if (!stats || gen !== generation) return
+      if (showDetails.value && status.value === 'live') details.value = readStreamDetails(stats)
       let bytes = 0
       stats.forEach((report: { type: string; bytesReceived?: number }) => {
         if (report.type === 'inbound-rtp') bytes += report.bytesReceived ?? 0
@@ -114,10 +118,12 @@ export function useWebRtcStream(cameraId: Ref<string>) {
         attempt = 0
         startWatchdog(peer, gen)
       } else if (peer.connectionState === 'disconnected') {
+        details.value = {}
         status.value = 'error'
         error.value = 'Connection interrupted'
         scheduleRetry(gen, DISCONNECT_GRACE_MS)
       } else if (peer.connectionState === 'failed') {
+        details.value = {}
         status.value = 'error'
         error.value = 'Connection failed'
         scheduleRetry(gen)
@@ -140,6 +146,19 @@ export function useWebRtcStream(cameraId: Ref<string>) {
     }
   }
 
+  watch([showDetails, status], async ([enabled, state], _, onCleanup) => {
+    details.value = {}
+    if (!enabled || state !== 'live' || !pc) return
+    const peer = pc
+    const gen = generation
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
+    const stats = await peer.getStats().catch(() => undefined)
+    if (stats && !cancelled && gen === generation) details.value = readStreamDetails(stats)
+  })
+
   watch(
     cameraId,
     () => {
@@ -155,5 +174,5 @@ export function useWebRtcStream(cameraId: Ref<string>) {
     teardown()
   })
 
-  return { stream, status, error, reconnect: connect }
+  return { stream, status, error, details, reconnect: connect }
 }
