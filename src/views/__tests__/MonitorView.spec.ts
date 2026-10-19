@@ -65,6 +65,15 @@ describe('MonitorView', () => {
     wrapper.unmount()
   })
 
+  it('passes the stream details preference to the grid', async () => {
+    const wrapper = await mountMonitor(camera('nursery', 'Nursery'))
+    expect(wrapper.getComponent(CameraGrid).props('showStreamDetails')).toBe(false)
+    useSettingsStore().setShowStreamDetails(true)
+    await nextTick()
+    expect(wrapper.getComponent(CameraGrid).props('showStreamDetails')).toBe(true)
+    wrapper.unmount()
+  })
+
   it('stops the audio of a camera that gets hidden', async () => {
     const monitor = useMonitorStore()
     const wrapper = await mountMonitor(camera('nursery', 'Nursery'), camera('cot', 'Cot'))

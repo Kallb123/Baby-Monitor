@@ -12,6 +12,7 @@ const settings = useSettingsStore()
 const configStore = useConfigStore()
 const { info, error } = useSystemInfo()
 const decibelsLabelId = useId()
+const streamDetailsLabelId = useId()
 const cameraLabelPrefix = useId()
 
 // This page can be the first one opened (a reload on /settings), before the
@@ -70,6 +71,25 @@ const homeAssistant = computed(() => {
             :aria-checked="settings.showDecibels"
             :aria-labelledby="decibelsLabelId"
             @click="settings.setShowDecibels(!settings.showDecibels)"
+          >
+            <span class="switch-knob" />
+          </button>
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span :id="streamDetailsLabelId" class="row-label">Stream details</span>
+            <span class="row-help">
+              Shows a small overlay on each video feed with the received resolution, frame rate,
+              video codec and audio codec. Unavailable details appear as —.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            :aria-checked="settings.showStreamDetails"
+            :aria-labelledby="streamDetailsLabelId"
+            @click="settings.setShowStreamDetails(!settings.showStreamDetails)"
           >
             <span class="switch-knob" />
           </button>

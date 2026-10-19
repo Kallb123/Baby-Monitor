@@ -9,6 +9,7 @@ const SETTINGS_STORAGE_KEY = 'baby-monitor:settings'
 // Each field is optional so settings added later don't discard older saves.
 const storedSettingsSchema = z.object({
   showDecibels: z.boolean().optional(),
+  showStreamDetails: z.boolean().optional(),
   hiddenCameraIds: z.array(z.string()).optional(),
 })
 
@@ -20,6 +21,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const stored = readStored(SETTINGS_STORAGE_KEY, storedSettingsSchema) ?? {}
   /** Show each tile's sound level as a dBFS number beside the meter. */
   const showDecibels = ref(stored.showDecibels ?? false)
+  const showStreamDetails = ref(stored.showStreamDetails ?? false)
   /**
    * Cameras kept off this device's monitor. Hidden cameras get no tile, so no
    * stream is opened for them. May hold ids of cameras deleted since.
@@ -28,12 +30,20 @@ export const useSettingsStore = defineStore('settings', () => {
   const hiddenSet = computed(() => new Set(hiddenCameraIds.value))
 
   // One write for every field: saving a single one would drop the others.
-  watch([showDecibels, hiddenCameraIds], ([decibels, hidden]) =>
-    writeStored(SETTINGS_STORAGE_KEY, { showDecibels: decibels, hiddenCameraIds: hidden }),
+  watch([showDecibels, showStreamDetails, hiddenCameraIds], ([decibels, details, hidden]) =>
+    writeStored(SETTINGS_STORAGE_KEY, {
+      showDecibels: decibels,
+      showStreamDetails: details,
+      hiddenCameraIds: hidden,
+    }),
   )
 
   function setShowDecibels(on: boolean) {
     showDecibels.value = on
+  }
+
+  function setShowStreamDetails(on: boolean) {
+    showStreamDetails.value = on
   }
 
   function isCameraHidden(cameraId: string) {
@@ -56,8 +66,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     showDecibels,
+    showStreamDetails,
     hiddenCameraIds,
     setShowDecibels,
+    setShowStreamDetails,
     isCameraHidden,
     setCameraHidden,
     pruneHiddenCameras,

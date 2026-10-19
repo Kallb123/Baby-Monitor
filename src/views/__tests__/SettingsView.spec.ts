@@ -58,6 +58,23 @@ describe('SettingsView', () => {
     wrapper.unmount()
   })
 
+  it('toggles stream details with a labelled switch', async () => {
+    vi.mocked(fetchSystemInfo).mockResolvedValue({
+      homeAssistant: { status: 'unconfigured' },
+      go2rtc: { url: 'http://localhost:1984' },
+    })
+    const wrapper = mountView()
+    const label = wrapper.findAll('.row-label').find((el) => el.text() === 'Stream details')!
+    const toggle = wrapper.get(`[aria-labelledby="${label.attributes('id')}"]`)
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(useSettingsStore().showStreamDetails).toBe(true)
+    await toggle.trigger('click')
+    expect(useSettingsStore().showStreamDetails).toBe(false)
+    wrapper.unmount()
+  })
+
   it('explains a failed connection', async () => {
     vi.mocked(fetchSystemInfo).mockResolvedValue({
       homeAssistant: {

@@ -151,6 +151,7 @@ function openAdd() {
         :audio-camera-id="monitor.audioCameraId"
         :editing="monitor.editing"
         :show-decibels="settings.showDecibels"
+        :show-stream-details="settings.showStreamDetails"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

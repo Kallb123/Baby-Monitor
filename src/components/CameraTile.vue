@@ -26,8 +26,16 @@ const props = withDefaults(
     editing?: boolean
     /** Show the sound level in dBFS next to the meter. */
     showDecibels?: boolean
+    /** Show the received stream's resolution and codecs. */
+    showStreamDetails?: boolean
   }>(),
-  { compact: false, listenOnTap: false, editing: false, showDecibels: false },
+  {
+    compact: false,
+    listenOnTap: false,
+    editing: false,
+    showDecibels: false,
+    showStreamDetails: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -36,7 +44,10 @@ const emit = defineEmits<{
 }>()
 
 const video = useTemplateRef<HTMLVideoElement>('video')
-const { stream, status, reconnect } = useWebRtcStream(toRef(() => props.camera.id))
+const { stream, status, details, reconnect } = useWebRtcStream(
+  toRef(() => props.camera.id),
+  toRef(() => props.showStreamDetails),
+)
 // Editing a camera's source keeps its id (the go2rtc stream name), so pick up
 // the new source explicitly; the tile stays mounted across config saves.
 watch(
@@ -94,7 +105,13 @@ watch([video, () => props.audioActive], ([el, active]) => {
 <template>
   <div
     class="camera-tile"
-    :class="{ compact, listening: audioActive, crying, editing }"
+    :class="{
+      compact,
+      listening: audioActive,
+      crying,
+      editing,
+      'details-visible': showStreamDetails,
+    }"
     role="button"
     tabindex="0"
     :aria-pressed="editing ? undefined : audioActive"
@@ -136,6 +153,26 @@ watch([video, () => props.audioActive], ([el, active]) => {
         <span v-else-if="!editing" class="muted" title="Muted">
           <AppIcon name="volume-off" :size="18" />
         </span>
+
+        <div v-if="showStreamDetails && status === 'live'" class="stream-details">
+          <template v-if="compact">
+            <span title="Resolution · video codec">
+              {{ details.resolution?.replaceAll(' ', '') ?? '—' }} · {{ details.videoCodec ?? '—' }}
+            </span>
+            <span title="Audio codec · frame rate">
+              {{ details.audioCodec ?? '—' }} ·
+              {{ details.framesPerSecond === undefined ? '—' : `${details.framesPerSecond} fps` }}
+            </span>
+          </template>
+          <template v-else>
+            <span>
+              Video: {{ details.resolution ?? '—' }} ·
+              {{ details.framesPerSecond === undefined ? '—' : `${details.framesPerSecond} fps` }} ·
+              {{ details.videoCodec ?? '—' }}
+            </span>
+            <span>Audio: {{ details.audioCodec ?? '—' }}</span>
+          </template>
+        </div>
       </div>
 
       <div class="bottom">
@@ -274,7 +311,7 @@ video {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -305,6 +342,43 @@ video {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+}
+
+.stream-details {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 100%;
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-bg) 80%, transparent);
+  color: var(--color-text-strong);
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.details-visible .top {
+  flex-wrap: wrap;
+}
+
+.compact .stream-details {
+  font-size: 10px;
+}
+
+.compact.details-visible {
+  --pad: 8px;
+}
+
+.compact.details-visible .top {
+  gap: 4px 6px;
+}
+
+.compact.details-visible .badge,
+.compact.details-visible .muted {
+  height: 24px;
+  min-width: 24px;
 }
 
 .badge,

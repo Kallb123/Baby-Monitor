@@ -15,6 +15,7 @@ const props = defineProps<{
   audioCameraId: string | undefined
   editing: boolean
   showDecibels: boolean
+  showStreamDetails: boolean
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +63,7 @@ const gridStyle = computed(() => {
       :listen-on-tap="!!focusId && camera.id !== focusId"
       :editing="editing"
       :show-decibels="showDecibels"
+      :show-stream-details="showStreamDetails"
       @audio="(on) => emit('audio', camera.id, on)"
       @edit="emit('edit', camera.id)"
     />
