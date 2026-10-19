@@ -19,6 +19,8 @@ monitor.
   monitor without deleting them, and shows the Home Assistant URL and whether
   the server can reach Home Assistant.
 - Works in portrait and landscape.
+- Installable on your home screen, with automatic screen wake lock while the
+  app is visible on supported browsers.
 
 > **Status:** foundation. The app shell, config persistence, layouts, level
 > meters, Home Assistant polling and WebRTC playback via go2rtc are in place.
@@ -75,8 +77,9 @@ with `docker compose pull && docker compose up -d`. Set `BABY_MONITOR_TAG` in
 `.env` to pin a `sha-…` tag. Add `--build` to `up` to build the image from
 your checkout instead.
 
-Open `http://<host>:3000` on each device, then tap **+** to add cameras. Add
-it to the home screen for a full-screen experience.
+Open `http://<host>:3000` on each device, then tap **+** to add cameras. For
+installation and automatic screen wake lock, serve it over HTTPS as described
+below.
 
 `docker-compose.yml` runs everything on the host network:
 
@@ -108,6 +111,32 @@ when they are created, so `docker compose restart` won't pick it up.
 App config and go2rtc's saved streams live in the `baby-monitor-data` and
 `go2rtc-config` Docker volumes, so they survive rebuilds and never land in
 the git working tree. `docker compose down -v` wipes them.
+
+## Install on a phone or tablet
+
+Serve the app through an HTTPS reverse proxy with a certificate trusted by the
+device. PWA installation, the service worker and screen wake lock require a
+secure context (HTTPS, or `localhost` for development); plain HTTP on a LAN IP
+does not enable these features.
+
+In Chrome or Edge, use the browser's **Install app** action. On iPhone or iPad,
+open the app in Safari and choose **Share → Add to Home Screen**. Launching from
+the home screen opens Baby Monitor in its own window, in either orientation.
+
+The app requests a screen wake lock automatically while visible, including
+when running in a browser tab. It releases the lock when hidden or closed and
+requests it again when you return. A tap or key press also retries a denied
+or released lock. Browser support, device power saving and system policy can
+prevent the lock; it cannot keep a background app or a manually locked screen
+awake.
+
+Production builds cache the app shell, including fonts and the settings page.
+Camera streams, configuration and sensor readings still require the server and
+are never cached by the service worker. App updates wait until all app windows
+and tabs are closed, so an update does not reload a running monitor.
+
+To check installation locally, run `npm run preview` and visit
+`http://localhost:3000`. The service worker is disabled in the Vite dev server.
 
 ## Development
 
@@ -190,7 +219,6 @@ This is designed for a trusted home network.
 - Local, in-browser cry detection fallback from the audio level.
 - Remove go2rtc streams for deleted cameras.
 - Optional app login / PIN.
-- PWA manifest and wake lock so a tablet can stay on as a monitor.
 
 ## Contributing
 
