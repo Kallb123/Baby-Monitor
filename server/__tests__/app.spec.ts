@@ -59,6 +59,8 @@ describe('server app', () => {
   afterEach(async () => {
     await app.close()
     await rm(dir, { recursive: true, force: true })
+    vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('round-trips the config and registers streams with go2rtc', async () => {
@@ -108,6 +110,81 @@ describe('server app', () => {
       'http://ha:8123/api/states/sensor.nursery_temp',
     ])
     expect(haFetch.mock.calls[0]![1]?.headers).toEqual({ Authorization: 'Bearer secret-token' })
+  })
+
+  it('streams snapshots over SSE, emits heartbeats and closes on HA failure', async () => {
+    const stop = vi.fn<() => void>()
+    const watch = vi.spyOn(HomeAssistantClient.prototype, 'watchStates').mockReturnValue(stop)
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+    vi.useFakeTimers()
+    const res = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    let data = ''
+    res.stream().on('data', (chunk) => (data += String(chunk)))
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('text/event-stream')
+    expect(res.headers['cache-control']).toBe('no-cache, no-transform')
+    expect(res.headers['x-accel-buffering']).toBe('no')
+    expect(watch.mock.lastCall![0].sort()).toEqual([
+      'binary_sensor.nursery_crying',
+      'sensor.nursery_temp',
+    ])
+    const states = {
+      'binary_sensor.nursery_crying': {
+        entityId: 'binary_sensor.nursery_crying',
+        state: 'on',
+        lastChanged: 'now',
+      },
+    }
+    watch.mock.lastCall![1](states)
+    await vi.waitFor(() => expect(data).toContain(JSON.stringify({ configured: true, states })))
+    expect(data).not.toContain('secret-token')
+    const second = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    let secondData = ''
+    second.stream().on('data', (chunk) => (secondData += String(chunk)))
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(secondData).toContain('event: heartbeat\ndata: {}\n\n')
+    watch.mock.lastCall![2]()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(res.raw.res.writableEnded).toBe(true)
+    expect(second.raw.res.writableEnded).toBe(true)
+    expect(stop).toHaveBeenCalledOnce()
+  })
+
+  it('ends SSE on config changes and releases HA resources on viewer departure and shutdown', async () => {
+    const stop = vi.fn<() => void>()
+    const watch = vi.spyOn(HomeAssistantClient.prototype, 'watchStates').mockReturnValue(stop)
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+    const first = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [] } })
+    expect(first.raw.res.writableEnded).toBe(true)
+    expect(stop).toHaveBeenCalledOnce()
+
+    await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+    const second = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    second.raw.res.destroy()
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(2))
+
+    const third = await app.inject({ url: '/api/ha/events', payloadAsStream: true })
+    await app.close()
+    expect(third.raw.res.writableEnded).toBe(true)
+    expect(stop).toHaveBeenCalledTimes(3)
+    expect(watch).toHaveBeenCalledTimes(3)
+  })
+
+  it('streams an empty unconfigured snapshot without leaking secrets or polling HA', async () => {
+    const bare = await buildApp({
+      store: new ConfigStore(dir),
+      go2rtc: new Go2rtcClient({ baseUrl: 'http://go2rtc:1984', fetch: go2rtcFetch }),
+    })
+    try {
+      const res = await bare.inject({ url: '/api/ha/events', payloadAsStream: true })
+      let data = ''
+      res.stream().on('data', (chunk) => (data += String(chunk)))
+      await vi.waitFor(() => expect(data).toContain('data: {"configured":false,"states":{}}\n\n'))
+      expect(haFetch).not.toHaveBeenCalled()
+    } finally {
+      await bare.close()
+    }
   })
 
   it('proxies WebRTC offers for known cameras only', async () => {

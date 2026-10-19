@@ -16,7 +16,11 @@ const REQUEST_TIMEOUT_MS = 10_000
 
 // A timeout matters on flaky tablet Wi-Fi: a hung request must not stall polling forever.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...init })
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const response = await fetch(path, {
+    ...init,
+    signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+  })
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as ApiError | undefined
     throw new ApiRequestError(response.status, body)
@@ -36,8 +40,8 @@ export function saveConfig(config: AppConfig): Promise<AppConfig> {
   })
 }
 
-export function fetchEntityStates(): Promise<EntityStatesResponse> {
-  return request('/api/ha/states')
+export function fetchEntityStates(signal?: AbortSignal): Promise<EntityStatesResponse> {
+  return request('/api/ha/states', { signal })
 }
 
 export function fetchSystemInfo(): Promise<SystemInfoResponse> {

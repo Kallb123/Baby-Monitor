@@ -5,6 +5,7 @@ export interface HomeAssistantOptions {
   token: string
   fetch?: typeof fetch
   timeoutMs?: number
+  createWebSocket?: (url: string) => WebSocket
 }
 
 interface HaStateBody {
@@ -12,6 +13,16 @@ interface HaStateBody {
   state: string
   last_changed: string
   attributes?: { unit_of_measurement?: string; friendly_name?: string }
+}
+
+function entityState(body: HaStateBody): EntityState {
+  return {
+    entityId: body.entity_id,
+    state: body.state,
+    unit: body.attributes?.unit_of_measurement,
+    friendlyName: body.attributes?.friendly_name,
+    lastChanged: body.last_changed,
+  }
 }
 
 function fetchFailureReason(error: unknown): string {
@@ -25,23 +36,140 @@ function fetchFailureReason(error: unknown): string {
 }
 
 /**
- * Minimal Home Assistant REST client. Runs server-side only so the
+ * Home Assistant client. Runs server-side only so the
  * long-lived token never reaches the browser.
- *
- * TODO: switch to the HA WebSocket API (subscribe_entities) and push updates
- * to clients, so cry alerts arrive without polling latency.
  */
 export class HomeAssistantClient {
   readonly baseUrl: string
   readonly #token: string
   readonly #fetch: typeof fetch
   readonly #timeoutMs: number
+  readonly #createWebSocket: (url: string) => WebSocket
 
   constructor(options: HomeAssistantOptions) {
     this.baseUrl = options.baseUrl
     this.#token = options.token
     this.#fetch = options.fetch ?? fetch
     this.#timeoutMs = options.timeoutMs ?? 5000
+    this.#createWebSocket = options.createWebSocket ?? ((url) => new WebSocket(url))
+  }
+
+  /** Subscribe before taking the snapshot so changes during setup cannot be missed. */
+  watchStates(
+    entityIds: string[],
+    onStates: (states: Record<string, EntityState>) => void,
+    onUnavailable: () => void,
+  ): () => void {
+    const wanted = new Set(entityIds)
+    let socket: WebSocket | undefined
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let heartbeat: ReturnType<typeof setInterval> | undefined
+    let states: Record<string, EntityState> | undefined
+    const pending = new Map<string, HaStateBody | null>()
+    let phase: 'auth_required' | 'auth_ok' | 'subscribe' | 'snapshot' | 'live' = 'auth_required'
+    let nextId = 3
+    let pingId: number | undefined
+
+    const stop = () => {
+      if (stopped) return
+      stopped = true
+      clearTimeout(timer)
+      clearInterval(heartbeat)
+      if (socket) {
+        socket.onmessage = socket.onerror = socket.onclose = null
+        socket.close()
+      }
+    }
+    const fail = () => {
+      if (stopped) return
+      stop()
+      onUnavailable()
+    }
+    const deadline = () => {
+      clearTimeout(timer)
+      timer = setTimeout(fail, this.#timeoutMs)
+    }
+    const send = (message: object) => socket!.send(JSON.stringify(message))
+    const apply = (id: string, body: HaStateBody | null) => {
+      if (body) states![id] = entityState(body)
+      else delete states![id]
+    }
+
+    try {
+      const url = new URL(`${this.baseUrl.replace(/\/+$/, '')}/api/websocket`)
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+      socket = this.#createWebSocket(url.toString())
+      socket.onerror = socket.onclose = fail
+      socket.onmessage = (event) => {
+        if (stopped) return
+        try {
+          const message = JSON.parse(String(event.data)) as {
+            type: string
+            id?: number
+            success?: boolean
+            result?: HaStateBody[]
+            event?: { data: { entity_id: string; new_state: HaStateBody | null } }
+          }
+          if (message.type === 'auth_invalid') return fail()
+          if (message.type === 'auth_required' && phase === 'auth_required') {
+            phase = 'auth_ok'
+            send({ type: 'auth', access_token: this.#token })
+            deadline()
+          } else if (message.type === 'auth_ok' && phase === 'auth_ok') {
+            phase = 'subscribe'
+            send({ id: 1, type: 'subscribe_events', event_type: 'state_changed' })
+            deadline()
+          } else if (message.type === 'result' && message.id === 1 && phase === 'subscribe') {
+            if (!message.success) return fail()
+            phase = 'snapshot'
+            send({ id: 2, type: 'get_states' })
+            deadline()
+          } else if (message.type === 'result' && message.id === 2 && phase === 'snapshot') {
+            if (!message.success || !Array.isArray(message.result)) return fail()
+            states = {}
+            for (const body of message.result) {
+              if (wanted.has(body.entity_id)) apply(body.entity_id, body)
+            }
+            for (const [id, body] of pending) apply(id, body)
+            pending.clear()
+            phase = 'live'
+            clearTimeout(timer)
+            onStates({ ...states })
+            // A quiet nursery is normal; ping/pong detects a half-open HA connection.
+            heartbeat = setInterval(() => {
+              if (pingId !== undefined) return
+              try {
+                pingId = nextId++
+                send({ id: pingId, type: 'ping' })
+                deadline()
+              } catch {
+                fail()
+              }
+            }, 30_000)
+          } else if (message.type === 'pong' && pingId !== undefined && message.id === pingId) {
+            clearTimeout(timer)
+            pingId = undefined
+          } else if (message.type === 'event' && message.id === 1 && message.event) {
+            const { entity_id: id, new_state: body } = message.event.data
+            if (!wanted.has(id)) return
+            if (!states) pending.set(id, body)
+            else {
+              apply(id, body)
+              onStates({ ...states })
+            }
+          }
+        } catch {
+          // Errors can contain the URL or token. Only signal availability to callers.
+          fail()
+        }
+      }
+      deadline()
+    } catch {
+      // Let the caller register its disposer before reporting synchronous setup failures.
+      queueMicrotask(fail)
+    }
+    return stop
   }
 
   /**
@@ -95,12 +223,6 @@ export class HomeAssistantClient {
     if (response.status === 404) return undefined
     if (!response.ok) throw new Error(`Home Assistant ${response.status} for ${entityId}`)
     const body = (await response.json()) as HaStateBody
-    return {
-      entityId: body.entity_id,
-      state: body.state,
-      unit: body.attributes?.unit_of_measurement,
-      friendlyName: body.attributes?.friendly_name,
-      lastChanged: body.last_changed,
-    }
+    return entityState(body)
   }
 }
