@@ -13,11 +13,13 @@ import { statusLine } from '@/lib/status-line'
 import { useConfigStore } from '@/stores/config'
 import { useMonitorStore } from '@/stores/monitor'
 import { useSettingsStore } from '@/stores/settings'
+import { useSoundHistoryStore } from '@/stores/sound-history'
 import { referencedEntityIds } from '@shared/config.ts'
 
 const configStore = useConfigStore()
 const monitor = useMonitorStore()
 const settings = useSettingsStore()
+const soundHistory = useSoundHistoryStore()
 const { states, configured: haConfigured, error: statesError } = useEntityStates()
 
 const CONFIG_RETRY_MS = 5000
@@ -63,7 +65,9 @@ watch(visible, (now) => {
 watch(
   () => configStore.loaded && cameras.value.map((c) => c.id),
   (ids) => {
-    if (ids) settings.pruneHiddenCameras(ids)
+    if (!ids) return
+    settings.pruneHiddenCameras(ids)
+    soundHistory.pruneDeletedCameras(ids)
   },
   { immediate: true },
 )

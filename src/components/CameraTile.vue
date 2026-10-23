@@ -4,6 +4,7 @@ import { computed, toRef, useTemplateRef, watch } from 'vue'
 import type { EntityState } from '@shared/api.ts'
 import type { Camera } from '@shared/config.ts'
 import { useAudioLevel } from '@/composables/useAudioLevel'
+import { useSoundHistoryRecording } from '@/composables/useSoundHistoryRecording'
 import { useStirring } from '@/composables/useStirring'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
 import { decibelReadout } from '@/lib/audio-level'
@@ -57,6 +58,7 @@ watch(
 const { level, db, status: levelStatus } = useAudioLevel(stream)
 const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
 const { stirring } = useStirring(level)
+useSoundHistoryRecording(() => props.camera.id, db, stirring)
 
 const entityState = (id: string | undefined) => (id ? props.states[id] : undefined)
 const crying = computed(() => isCrying(entityState(props.camera.entities.cry)))

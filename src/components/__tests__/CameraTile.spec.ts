@@ -21,6 +21,11 @@ vi.mock('@/composables/useAudioLevel', () => ({
   useAudioLevel: () => ({ level: ref(0.5), db: ref(-30.4), status: ref('live') }),
 }))
 
+// Recording is covered by its own spec; here it would need a Pinia instance.
+vi.mock('@/composables/useSoundHistoryRecording', () => ({
+  useSoundHistoryRecording: vi.fn<() => void>(),
+}))
+
 const camera = {
   id: 'nursery',
   name: 'Nursery',

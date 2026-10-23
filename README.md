@@ -19,6 +19,13 @@ monitor.
   codecs, hide individual cameras from this device's
   monitor without deleting them, and shows the Home Assistant URL and whether
   the server can reach Home Assistant.
+- A history page (the clock icon in the header) charts the last 6, 12 or 24
+  hours per camera: the loudest sound each minute, minutes with stirring and
+  crying episodes, with a list of when it cried and for how long. Crying comes
+  from Home Assistant's own history (nothing extra to store on the server).
+  Sound levels are recorded in this device's browser while the monitor is
+  open, so a device that was closed or asleep shows blank stretches, and each
+  device only sees its own.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.

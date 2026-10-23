@@ -64,6 +64,11 @@ const icons = {
     circle('12', '12', '3'),
   ],
   'arrow-left': [path('m12 19-7-7 7-7'), path('M19 12H5')],
+  history: [
+    path('M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'),
+    path('M3 3v5h5'),
+    path('M12 7v5l4 2'),
+  ],
 } satisfies Record<string, IconElement[]>
 
 export type IconName = keyof typeof icons

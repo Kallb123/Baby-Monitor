@@ -11,6 +11,7 @@ import MonitorHeader from '@/components/MonitorHeader.vue'
 import { useConfigStore } from '@/stores/config'
 import { useMonitorStore } from '@/stores/monitor'
 import { useSettingsStore } from '@/stores/settings'
+import { useSoundHistoryStore } from '@/stores/sound-history'
 import MonitorView from '../MonitorView.vue'
 
 vi.mock('@/api', () => ({
@@ -111,7 +112,8 @@ describe('MonitorView', () => {
     expect(wrapper.findComponent(CameraGrid).exists()).toBe(false)
     expect(wrapper.text()).toContain('All cameras are hidden')
     expect(wrapper.text()).not.toContain('No cameras yet')
-    expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/settings')
+    const action = wrapper.findAllComponents(RouterLinkStub).find((l) => l.classes('card-action'))
+    expect(action?.props('to')).toBe('/settings')
     expect(wrapper.findComponent(MonitorHeader).props('canEdit')).toBe(false)
     wrapper.unmount()
   })
@@ -140,6 +142,17 @@ describe('MonitorView', () => {
     settings.setCameraHidden('cot', true)
     const wrapper = await mountMonitor(camera('nursery', 'Nursery'), camera('cot', 'Cot'))
     expect(settings.hiddenCameraIds).toEqual(['cot'])
+    wrapper.unmount()
+  })
+
+  it('forgets the sound history of deleted cameras but not of hidden ones', async () => {
+    const history = useSoundHistoryStore()
+    const now = Date.now()
+    for (const id of ['nursery', 'cot', 'gone']) history.record(id, -30, false, now)
+    useSettingsStore().setCameraHidden('cot', true)
+    const wrapper = await mountMonitor(camera('nursery', 'Nursery'), camera('cot', 'Cot'))
+    const kept = (id: string) => history.bucketsFor(id, 0, Infinity).length
+    expect([kept('nursery'), kept('cot'), kept('gone')]).toEqual([1, 1, 0])
     wrapper.unmount()
   })
 

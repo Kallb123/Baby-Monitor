@@ -2,16 +2,18 @@ import { existsSync } from 'node:fs'
 
 import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { ZodError } from 'zod'
+import { z, ZodError } from 'zod'
 
 import type {
   ApiError,
+  CryHistoryResponse,
   EntityStatesResponse,
   HealthResponse,
   SystemInfoResponse,
 } from '../shared/api.ts'
 import { referencedEntityIds } from '../shared/config.ts'
 import type { ConfigStore } from './config-store.ts'
+import { cryEntitiesByCamera, cryIntervals } from './cry-history.ts'
 import { EntityStateStream } from './entity-state-stream.ts'
 import type { Go2rtcClient } from './go2rtc.ts'
 import type { HomeAssistantClient } from './home-assistant.ts'
@@ -27,6 +29,10 @@ export interface AppDeps {
   clientDir?: string
   logger?: boolean
 }
+
+const historyQuerySchema = z.object({
+  hours: z.coerce.number().int().min(1).max(24).default(12),
+})
 
 /** Drops user:password@ so an HA_URL with embedded credentials is safe to show. */
 function displayUrl(url: string): string | undefined {
@@ -118,6 +124,49 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       request.log.warn({ err: errors[0], failed: errors.length }, 'Home Assistant fetch failed')
     }
     return { configured: true, states }
+  })
+
+  /** Crying intervals from HA's own recorder, so the server keeps no history itself. */
+  app.get('/api/ha/history', async (request, reply) => {
+    const query = historyQuerySchema.safeParse(request.query)
+    if (!query.success) {
+      return reply.status(400).send({
+        error: 'hours must be a whole number from 1 to 24',
+        issues: query.error.issues.map((issue) => ({
+          path: issue.path.map((p) => (typeof p === 'symbol' ? String(p) : p)),
+          message: issue.message,
+        })),
+      } satisfies ApiError)
+    }
+    const to = new Date()
+    const from = new Date(to.getTime() - query.data.hours * 3_600_000)
+    const empty: CryHistoryResponse = {
+      configured: Boolean(deps.homeAssistant),
+      from: from.toISOString(),
+      to: to.toISOString(),
+      cameras: {},
+    }
+    if (!deps.homeAssistant) return empty
+
+    const byCamera = cryEntitiesByCamera(await deps.store.load())
+    const entityIds = [...new Set(Object.values(byCamera))]
+    if (entityIds.length === 0) return empty
+    try {
+      const history = await deps.homeAssistant.getHistory(entityIds, from, to)
+      for (const [cameraId, entityId] of Object.entries(byCamera)) {
+        empty.cameras[cameraId] = { cry: cryIntervals(history[entityId] ?? []) }
+      }
+      return empty
+    } catch (error) {
+      // The client's own message never carries the URL or token; log only that.
+      request.log.warn(
+        { reason: error instanceof Error ? error.message : 'unknown' },
+        'Home Assistant history fetch failed',
+      )
+      return reply
+        .status(502)
+        .send({ error: 'Home Assistant history unavailable' } satisfies ApiError)
+    }
   })
 
   app.get('/api/ha/events', (_request, reply) => {
