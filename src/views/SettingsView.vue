@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 import type { HomeAssistantStatus } from '@shared/api.ts'
 import AppIcon from '@/components/AppIcon.vue'
 import { useSystemInfo } from '@/composables/useSystemInfo'
+import { SENSITIVITIES, sensitivityLabels } from '@/lib/sound-status'
 import { useConfigStore } from '@/stores/config'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -132,6 +133,45 @@ const homeAssistant = computed(() => {
             </button>
           </div>
         </template>
+      </section>
+
+      <section
+        v-if="configStore.loaded && configStore.config.cameras.length > 0"
+        class="card"
+        aria-labelledby="stirring-heading"
+      >
+        <h2 id="stirring-heading" class="card-title">Stirring sensitivity</h2>
+        <p class="card-note">
+          Stirring is measured against each room's background noise, so steady sounds like a
+          white-noise machine are ignored after a minute or two. Higher reacts to quieter sounds.
+          Saved on this device only.
+        </p>
+
+        <div
+          v-for="camera in configStore.config.cameras"
+          :key="camera.id"
+          class="row sensitivity-row"
+        >
+          <span :id="`${cameraLabelPrefix}-stirring-${camera.id}`" class="row-label">{{
+            camera.name
+          }}</span>
+          <div
+            class="segments"
+            role="radiogroup"
+            :aria-labelledby="`${cameraLabelPrefix}-stirring-${camera.id}`"
+          >
+            <label v-for="option in SENSITIVITIES" :key="option" class="segment">
+              <input
+                type="radio"
+                :name="`${cameraLabelPrefix}-stirring-${camera.id}`"
+                :value="option"
+                :checked="settings.sensitivityFor(camera.id) === option"
+                @change="settings.setSensitivity(camera.id, option)"
+              />
+              <span>{{ sensitivityLabels[option] }}</span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="system-heading">
@@ -355,6 +395,58 @@ const homeAssistant = computed(() => {
   transform: translateX(24px);
 }
 
+/* Wraps on narrow phones so a long camera name keeps room beside the control. */
+.sensitivity-row {
+  flex-wrap: wrap;
+}
+
+.sensitivity-row .row-label {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.segments {
+  display: flex;
+  flex: none;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-800);
+}
+
+.segment {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+/* The native radio stays for keyboard and screen-reader behaviour. */
+.segment input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segment:has(input:checked) {
+  background: var(--color-accent);
+  color: var(--color-neutral-100);
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+}
+
 @media (max-width: 560px) {
   .card {
     padding: 20px 20px 4px;
@@ -364,11 +456,17 @@ const homeAssistant = computed(() => {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
+
+  .segment {
+    min-width: 60px;
+    padding: 0 8px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .switch,
-  .switch-knob {
+  .switch-knob,
+  .segment {
     transition: none;
   }
 }

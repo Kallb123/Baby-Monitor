@@ -8,7 +8,13 @@ import { useStirring } from '@/composables/useStirring'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
 import { decibelReadout } from '@/lib/audio-level'
 import { formatMeasurement, isCrying } from '@/lib/entities'
-import { soundStatus, soundStatusLabels } from '@/lib/sound-status'
+import { backgroundReadout } from '@/lib/noise-floor'
+import {
+  DEFAULT_SENSITIVITY,
+  soundStatus,
+  soundStatusLabels,
+  type Sensitivity,
+} from '@/lib/sound-status'
 import AppIcon from './AppIcon.vue'
 import LevelMeter from './LevelMeter.vue'
 
@@ -28,6 +34,8 @@ const props = withDefaults(
     showDecibels?: boolean
     /** Show the received stream's resolution and codecs. */
     showStreamDetails?: boolean
+    /** How easily the tile reads "Stirring" against its room's background noise. */
+    stirringSensitivity?: Sensitivity
   }>(),
   {
     compact: false,
@@ -35,6 +43,7 @@ const props = withDefaults(
     editing: false,
     showDecibels: false,
     showStreamDetails: false,
+    stirringSensitivity: DEFAULT_SENSITIVITY,
   },
 )
 
@@ -56,7 +65,12 @@ watch(
 )
 const { level, db, status: levelStatus } = useAudioLevel(stream)
 const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
-const { stirring } = useStirring(level)
+const { stirring, floorDb } = useStirring(db, () => props.stirringSensitivity)
+// The learned background lets users calibrate sensitivity; it means nothing
+// while the meter isn't measuring.
+const background = computed(() =>
+  levelStatus.value === 'live' ? backgroundReadout(floorDb.value) : undefined,
+)
 
 const entityState = (id: string | undefined) => (id ? props.states[id] : undefined)
 const crying = computed(() => isCrying(entityState(props.camera.entities.cry)))
@@ -184,9 +198,9 @@ watch([video, () => props.audioActive], ([el, active]) => {
           v-if="showDecibels"
           class="decibels"
           :class="{ inactive: levelStatus !== 'live' }"
-          title="RMS level in dBFS (0 is the loudest the stream can carry)"
+          title="RMS level in dBFS (0 is the loudest the stream can carry), and the learned background noise"
         >
-          {{ decibels }}
+          {{ decibels }}<span v-if="background" class="background"> · {{ background }}</span>
         </span>
       </div>
     </div>
@@ -459,6 +473,11 @@ video {
   text-align: right;
   white-space: nowrap;
   color: var(--color-text-strong);
+}
+
+.decibels .background {
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .decibels.inactive {

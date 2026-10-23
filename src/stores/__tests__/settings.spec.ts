@@ -83,6 +83,7 @@ describe('settings store', () => {
       showDecibels: true,
       showStreamDetails: false,
       hiddenCameraIds: ['nursery'],
+      stirringSensitivity: {},
     })
 
     setActivePinia(createPinia())
@@ -115,5 +116,63 @@ describe('settings store', () => {
     settings.pruneHiddenCameras(['nursery', 'cot'])
     await nextTick()
     expect(settings.hiddenCameraIds).toEqual(['nursery'])
+  })
+
+  it('defaults every camera to medium stirring sensitivity', () => {
+    const settings = useSettingsStore()
+    expect(settings.sensitivityFor('nursery')).toBe('medium')
+    expect(settings.stirringSensitivity).toEqual({})
+  })
+
+  it('remembers stirring sensitivity per camera on this device', async () => {
+    const settings = useSettingsStore()
+    settings.setSensitivity('nursery', 'high')
+    settings.setSensitivity('cot', 'low')
+    settings.setSensitivity('cot', 'medium')
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.sensitivityFor('nursery')).toBe('high')
+    expect(reloaded.sensitivityFor('cot')).toBe('medium')
+    expect(reloaded.stirringSensitivity).toEqual({ nursery: 'high' })
+  })
+
+  it('keeps other settings when sensitivity is saved, and the reverse', async () => {
+    localStorage.setItem(
+      'baby-monitor:settings',
+      '{"showDecibels":true,"hiddenCameraIds":["cot"],"stirringSensitivity":{"nursery":"low"}}',
+    )
+    const settings = useSettingsStore()
+    expect(settings.sensitivityFor('nursery')).toBe('low')
+    settings.setSensitivity('nursery', 'high')
+    await nextTick()
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.showDecibels).toBe(true)
+    expect(reloaded.hiddenCameraIds).toEqual(['cot'])
+    expect(reloaded.sensitivityFor('nursery')).toBe('high')
+
+    reloaded.setShowDecibels(false)
+    await nextTick()
+    setActivePinia(createPinia())
+    expect(useSettingsStore().sensitivityFor('nursery')).toBe('high')
+  })
+
+  it('ignores a corrupt sensitivity list', () => {
+    localStorage.setItem('baby-monitor:settings', '{"stirringSensitivity":{"nursery":"loud"}}')
+    expect(useSettingsStore().sensitivityFor('nursery')).toBe('medium')
+  })
+
+  it('forgets stirring sensitivity of cameras that were deleted', async () => {
+    const settings = useSettingsStore()
+    settings.setSensitivity('nursery', 'high')
+    settings.setSensitivity('gone', 'low')
+    settings.pruneStirringSensitivity(['nursery', 'cot'])
+    await nextTick()
+    expect(settings.stirringSensitivity).toEqual({ nursery: 'high' })
+
+    setActivePinia(createPinia())
+    expect(useSettingsStore().sensitivityFor('gone')).toBe('medium')
   })
 })

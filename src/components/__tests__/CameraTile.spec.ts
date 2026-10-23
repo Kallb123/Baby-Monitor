@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref, shallowRef } from 'vue'
+import { nextTick, ref, shallowRef } from 'vue'
 
 import type { StreamDetails } from '@/lib/stream-details'
 import CameraTile from '../CameraTile.vue'
@@ -17,8 +17,9 @@ vi.mock('@/composables/useWebRtcStream', () => ({
     reconnect,
   }),
 }))
+const meterDb = ref<number | undefined>(-30.4)
 vi.mock('@/composables/useAudioLevel', () => ({
-  useAudioLevel: () => ({ level: ref(0.5), db: ref(-30.4), status: ref('live') }),
+  useAudioLevel: () => ({ level: ref(0.5), db: meterDb, status: ref('live') }),
 }))
 
 const camera = {
@@ -32,6 +33,7 @@ describe('CameraTile', () => {
   beforeEach(() => {
     details.value = {}
     streamStatus.value = 'live'
+    meterDb.value = -30.4
     HTMLMediaElement.prototype.play = vi.fn<HTMLMediaElement['play']>(() => Promise.resolve())
   })
 
@@ -146,6 +148,37 @@ describe('CameraTile', () => {
 
     await wrapper.setProps({ showDecibels: true })
     expect(wrapper.find('.decibels').text()).toBe('-30 dB')
+  })
+
+  it('shows the learned background noise beside the level once it is known', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(CameraTile, {
+        props: { camera, states: {}, audioActive: false, showDecibels: true },
+      })
+      expect(wrapper.find('.decibels').text()).toBe('-30 dB')
+
+      for (let i = 0; i < 20 * 15; i++) {
+        meterDb.value = -38.4 + (i % 2) * 0.01
+        await nextTick()
+        vi.advanceTimersByTime(66)
+      }
+      expect(wrapper.find('.decibels').text()).toBe('-38 dB · bg -38')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads stirring at a level that depends on the camera sensitivity', async () => {
+    const wrapper = mount(CameraTile, { props: { camera, states: {}, audioActive: false } })
+    meterDb.value = -45
+    await nextTick()
+    expect(wrapper.find('.sound-status').text()).toBe('Quiet')
+
+    await wrapper.setProps({ stirringSensitivity: 'high' })
+    meterDb.value = -44
+    await nextTick()
+    expect(wrapper.find('.sound-status').text()).toBe('Stirring')
   })
 
   it('shows current stream details only when enabled and live, including compact tiles', async () => {

@@ -10,8 +10,11 @@ monitor.
 - Every stream has a live sound-level meter, so you can see noise even while
   its audio is muted.
 - A tile glows and shows a "Crying" badge when Home Assistant reports crying,
-  and reads "Stirring" while its sound level is raised. Temperature and
-  humidity come from Home Assistant too.
+  and reads "Stirring" while its sound is well above that room's background
+  noise, which it learns over the last couple of minutes, so a white-noise
+  machine doesn't keep it stirring all night. Sensitivity (low, medium, high)
+  is set per camera in settings. Temperature and humidity come from Home
+  Assistant too.
 - Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
   camera.
 - A settings page (the gear in the header) can show each meter's level in

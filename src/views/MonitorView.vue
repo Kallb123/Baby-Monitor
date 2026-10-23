@@ -58,12 +58,14 @@ watch(visible, (now) => {
   if (now.length === 0) monitor.setEditing(false)
 })
 
-// Forget hidden ids of deleted cameras, but only once the real config is in:
+// Forget per-camera settings of deleted cameras, but only once the real config is in:
 // the empty default must not wipe the list.
 watch(
   () => configStore.loaded && cameras.value.map((c) => c.id),
   (ids) => {
-    if (ids) settings.pruneHiddenCameras(ids)
+    if (!ids) return
+    settings.pruneHiddenCameras(ids)
+    settings.pruneStirringSensitivity(ids)
   },
   { immediate: true },
 )
@@ -152,6 +154,7 @@ function openAdd() {
         :editing="monitor.editing"
         :show-decibels="settings.showDecibels"
         :show-stream-details="settings.showStreamDetails"
+        :stirring-sensitivity="settings.stirringSensitivity"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

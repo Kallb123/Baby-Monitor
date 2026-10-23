@@ -36,6 +36,12 @@ Data flow:
   track with one shared `AudioContext` (`src/lib/audio-context.ts`). Analysis
   nodes are never connected to the speakers. Audibility is controlled only by
   the `<video>` element's `muted` flag, driven by `useMonitorStore().audioCameraId`.
+  "Stirring" (`src/composables/useStirring.ts`) compares the smoothed dB with an
+  adaptive threshold: the room's background (`src/lib/noise-floor.ts`, the 10th
+  percentile of per-second minimums over 120 s, unknown for the first ~15 s)
+  plus a per-sensitivity margin, never below a per-sensitivity minimum
+  (`stirringThresholdDb` in `src/lib/sound-status.ts`). Medium's minimum is the
+  old fixed -43 dBFS.
 - **Home Assistant**: the server holds `HA_TOKEN` and exposes
   `GET /api/ha/states`, which returns only the entities referenced in the saved
   config (`server/home-assistant.ts`). A shared HA WebSocket `subscribe_entities`
@@ -55,7 +61,9 @@ Data flow:
   open `CameraDialog.vue`, which validates with the shared schema and saves
   the whole config through the config store.
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
-  such as the dB readout and which cameras to hide, kept in `localStorage` by
+  such as the dB readout (which also shows the learned background, `bg -38`),
+  which cameras to hide and each camera's stirring sensitivity, kept in
+  `localStorage` by
   `useSettingsStore` (not on the server, for the same reason as the layout),
   plus read-only server settings and a live Home Assistant check from
   `GET /api/system`.
@@ -64,7 +72,8 @@ Data flow:
   tile, no WebRTC connection and no audio tap. Hiding the audio camera stops
   its audio; a hidden focus camera falls back to the first visible one without
   overwriting the saved choice. If all are hidden the monitor points to
-  Settings. Ids of deleted cameras are pruned once the config has loaded.
+  Settings. Ids of deleted cameras are pruned (hidden list and stirring sensitivities)
+  once the config has loaded.
 
 ### API
 
