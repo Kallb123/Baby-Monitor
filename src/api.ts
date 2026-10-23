@@ -1,4 +1,9 @@
-import type { ApiError, EntityStatesResponse, SystemInfoResponse } from '@shared/api.ts'
+import type {
+  ApiError,
+  CryHistoryResponse,
+  EntityStatesResponse,
+  SystemInfoResponse,
+} from '@shared/api.ts'
 import type { AppConfig } from '@shared/config.ts'
 import type { StreamQuality } from '@shared/streams.ts'
 
@@ -53,6 +58,10 @@ export function saveConfig(config: AppConfig): Promise<AppConfig> {
 
 export function fetchEntityStates(signal?: AbortSignal): Promise<EntityStatesResponse> {
   return request('/api/ha/states', { signal })
+}
+
+export function fetchCryHistory(hours: number, signal?: AbortSignal): Promise<CryHistoryResponse> {
+  return request(`/api/ha/history?hours=${hours}`, { signal })
 }
 
 export function fetchSystemInfo(): Promise<SystemInfoResponse> {

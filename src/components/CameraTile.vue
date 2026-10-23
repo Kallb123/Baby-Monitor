@@ -5,6 +5,7 @@ import type { EntityState } from '@shared/api.ts'
 import type { Camera } from '@shared/config.ts'
 import { useAudioLevel } from '@/composables/useAudioLevel'
 import { useFeedAlertReporting } from '@/composables/useFeedAlertReporting'
+import { useSoundHistoryRecording } from '@/composables/useSoundHistoryRecording'
 import { useStirring } from '@/composables/useStirring'
 import { useStreamQuality } from '@/composables/useStreamQuality'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
@@ -87,6 +88,7 @@ watch(
 const { level, db, status: levelStatus } = useAudioLevel(stream)
 const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
 const { stirring, floorDb } = useStirring(db, () => props.stirringSensitivity)
+useSoundHistoryRecording(() => props.camera.id, db, stirring)
 // The learned background lets users calibrate sensitivity; it means nothing
 // while the meter isn't measuring.
 const background = computed(() =>

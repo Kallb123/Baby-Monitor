@@ -31,6 +31,13 @@ monitor.
   soft chime plays and the device vibrates, repeating every minute until the
   feed returns or you dismiss it. The chime needs one tap on the page first, as
   for any sound, and both the banner and the chime can be turned off in Settings.
+- A history page (the clock icon in the header) charts the last 6, 12 or 24
+  hours per camera: the loudest sound each minute, minutes with stirring and
+  crying episodes, with a list of when it cried and for how long. Crying comes
+  from Home Assistant's own history (nothing extra to store on the server).
+  Sound levels are recorded in this device's browser while the monitor is
+  open, so a device that was closed or asleep shows blank stretches, and each
+  device only sees its own.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.

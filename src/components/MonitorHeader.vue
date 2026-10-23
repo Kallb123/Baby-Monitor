@@ -79,6 +79,10 @@ const layouts = [
       <AppIcon name="plus" :size="22" />
     </button>
 
+    <RouterLink to="/history" class="history-btn" aria-label="History" title="History">
+      <AppIcon name="history" :size="22" />
+    </RouterLink>
+
     <RouterLink to="/settings" class="settings-btn" aria-label="Settings" title="Settings">
       <AppIcon name="settings" :size="22" />
     </RouterLink>
@@ -88,10 +92,10 @@ const layouts = [
 <style scoped>
 .monitor-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
   grid-template-areas:
-    'title layouts edit add settings'
-    'status layouts edit add settings';
+    'title layouts edit add history settings'
+    'status layouts edit add history settings';
   align-items: center;
   column-gap: 16px;
   flex: none;
@@ -137,6 +141,7 @@ const layouts = [
 
 .layout-btn,
 .add-btn,
+.history-btn,
 .settings-btn {
   display: grid;
   place-items: center;
@@ -199,14 +204,23 @@ const layouts = [
   background: var(--color-accent-400);
 }
 
+.history-btn,
 .settings-btn {
-  grid-area: settings;
   width: 52px;
   height: 52px;
   background: var(--color-surface);
   color: var(--color-text);
 }
 
+.history-btn {
+  grid-area: history;
+}
+
+.settings-btn {
+  grid-area: settings;
+}
+
+.history-btn:hover,
 .settings-btn:hover {
   filter: brightness(1.12);
 }
@@ -217,14 +231,14 @@ button:disabled {
 }
 
 /* Phones in portrait: icon-only Edit, and the status line gets its own row so
-   "… crying" isn't cut off next to the buttons. Settings drops into that row
-   too, or five buttons would squeeze the title out. */
+   "… crying" isn't cut off next to the buttons. History and Settings drop into
+   that row too, or six buttons would squeeze the title out. */
 @media (max-width: 560px) {
   .monitor-header {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
     grid-template-areas:
       'title layouts edit add'
-      'status status status settings';
+      'status status history settings';
     column-gap: 8px;
     row-gap: 6px;
     padding-left: calc(16px + env(safe-area-inset-left));
@@ -239,6 +253,7 @@ button:disabled {
     align-self: center;
   }
 
+  .history-btn,
   .settings-btn {
     justify-self: center;
     width: 40px;

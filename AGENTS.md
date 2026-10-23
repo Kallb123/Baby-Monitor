@@ -87,6 +87,17 @@ Data flow:
   `useSettingsStore` (not on the server, for the same reason as the layout),
   plus read-only server settings and a live Home Assistant check from
   `GET /api/system`.
+- **History** (`/history`, `HistoryView.vue`, opened from the header's clock
+  icon): crying comes from HA's recorder through `GET /api/ha/history`
+  (`HomeAssistantClient.getHistory`, converted by `server/cry-history.ts`), so
+  the server stores nothing. Sound level and stirring are recorded on each
+  device, once a second per live tile, into per-minute buckets
+  `[minuteStartMs, peakDb, stirred]` kept for 24 h in `localStorage`
+  (`src/lib/sound-history.ts`, `useSoundHistoryStore`, written at most once a
+  minute and on `pagehide`; `useSoundHistoryRecording` is called from
+  `CameraTile.vue`). Recording stops while the history page is open because the
+  tiles are unmounted. `SoundTimeline.vue` draws the SVG, with geometry in
+  `src/lib/history-chart.ts`.
 - **Hidden cameras**: `MonitorView.vue` passes the grid only the cameras
   `visibleCameras()` (`src/lib/cameras.ts`) keeps, so a hidden camera has no
   tile, no WebRTC connection and no audio tap. Hiding the audio camera stops
@@ -103,6 +114,7 @@ Data flow:
 | GET    | `/api/config`             | Current config                                                      |
 | PUT    | `/api/config`             | Validate, persist and return the config; 400 with `issues` on error |
 | GET    | `/api/ha/states`          | States of entities referenced by the config                         |
+| GET    | `/api/ha/history?hours=N` | Crying intervals per camera from HA history (N 1–24, default 12)    |
 | GET    | `/api/ha/events`          | SSE snapshots of configured entities, with heartbeat events         |
 | GET    | `/api/system`             | HA URL (credentials stripped), live HA check, go2rtc URL            |
 | POST   | `/api/streams/:id/webrtc` | Body: SDP offer. `?quality=main\|sub` (default main). SDP answer    |
