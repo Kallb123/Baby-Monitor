@@ -14,6 +14,8 @@ const configStore = useConfigStore()
 const { info, error } = useSystemInfo()
 const decibelsLabelId = useId()
 const streamDetailsLabelId = useId()
+const feedAlertsLabelId = useId()
+const feedSoundLabelId = useId()
 const cameraLabelPrefix = useId()
 
 // This page can be the first one opened (a reload on /settings), before the
@@ -91,6 +93,50 @@ const homeAssistant = computed(() => {
             :aria-checked="settings.showStreamDetails"
             :aria-labelledby="streamDetailsLabelId"
             @click="settings.setShowStreamDetails(!settings.showStreamDetails)"
+          >
+            <span class="switch-knob" />
+          </button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="alerts-heading">
+        <h2 id="alerts-heading" class="card-title">Alerts</h2>
+        <p class="card-note">Saved on this device only.</p>
+
+        <div class="row">
+          <div class="row-text">
+            <span :id="feedAlertsLabelId" class="row-label">Warn when a feed is lost</span>
+            <span class="row-help">
+              Shows a banner when a camera has been disconnected for 30 seconds, until it comes back
+              or you dismiss it.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            :aria-checked="settings.feedLostAlerts"
+            :aria-labelledby="feedAlertsLabelId"
+            @click="settings.setFeedLostAlerts(!settings.feedLostAlerts)"
+          >
+            <span class="switch-knob" />
+          </button>
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span :id="feedSoundLabelId" class="row-label">Chime and vibrate</span>
+            <span class="row-help">
+              Plays a soft chime and vibrates when a feed is lost, then repeats every minute. The
+              chime needs a tap on the page first, as for any sound.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            :aria-checked="settings.feedLostSound"
+            :aria-labelledby="feedSoundLabelId"
+            @click="settings.setFeedLostSound(!settings.feedLostSound)"
           >
             <span class="switch-knob" />
           </button>

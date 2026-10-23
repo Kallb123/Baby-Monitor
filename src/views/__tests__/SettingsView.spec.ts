@@ -176,4 +176,23 @@ describe('SettingsView', () => {
       wrapper.unmount()
     })
   })
+
+  it.each([
+    ['Warn when a feed is lost', 'feedLostAlerts'],
+    ['Chime and vibrate', 'feedLostSound'],
+  ] as const)('toggles "%s" with a labelled switch, on by default', async (labelText, key) => {
+    vi.mocked(fetchSystemInfo).mockResolvedValue({
+      homeAssistant: { status: 'unconfigured' },
+      go2rtc: { url: 'http://localhost:1984' },
+    })
+    const wrapper = mountView()
+    const label = wrapper.findAll('.row-label').find((el) => el.text() === labelText)!
+    const toggle = wrapper.get(`[aria-labelledby="${label.attributes('id')}"]`)
+    expect(toggle.attributes('aria-checked')).toBe('true')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(useSettingsStore()[key]).toBe(false)
+    wrapper.unmount()
+  })
 })

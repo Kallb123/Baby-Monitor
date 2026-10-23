@@ -34,14 +34,28 @@ Data flow:
   `POST /api/streams/:id/webrtc` (`src/composables/useWebRtcStream.ts`).
 - **Level meter**: `src/composables/useAudioLevel.ts` taps each stream's audio
   track with one shared `AudioContext` (`src/lib/audio-context.ts`). Analysis
-  nodes are never connected to the speakers. Audibility is controlled only by
-  the `<video>` element's `muted` flag, driven by `useMonitorStore().audioCameraId`.
+  nodes are never connected to the speakers, except the feed-lost chime
+  (`src/lib/alert-sound.ts`), which disconnects its nodes when done. Stream
+  audibility is controlled only by the `<video>` element's `muted` flag, driven
+  by `useMonitorStore().audioCameraId`.
   "Stirring" (`src/composables/useStirring.ts`) compares the smoothed dB with an
   adaptive threshold: the room's background (`src/lib/noise-floor.ts`, the 10th
   percentile of per-second minimums over 120 s, unknown for the first ~15 s)
   plus a per-sensitivity margin, never below a per-sensitivity minimum
   (`stirringThresholdDb` in `src/lib/sound-status.ts`). Medium's minimum is the
   old fixed -43 dBFS.
+- **Feed-lost alerts**: every `CameraTile` reports its stream status through
+  `useFeedAlertReporting` to the transient `useFeedAlertsStore`
+  (`src/stores/feed-alerts.ts`), which records when each camera went down (any
+  status but `live`, including never connected). Unmounted tiles are forgotten,
+  so hidden or deleted cameras never alert. After
+  `FEED_LOST_AFTER_MS` (`src/lib/feed-alerts.ts`, 30 s) the feed counts as lost:
+  `FeedAlertBanner.vue` (in the page flow under the header, `role="alert"`) lists
+  it with a per-camera Dismiss, which holds until the feed returns and drops
+  again. `useFeedAlertSound` chimes and vibrates when a feed is lost, then every
+  60 s until all are dismissed or restored. The store's 1 s ticker runs only
+  while a camera is down. The `feedLostAlerts` and `feedLostSound` settings are
+  per device.
 - **Home Assistant**: the server holds `HA_TOKEN` and exposes
   `GET /api/ha/states`, which returns only the entities referenced in the saved
   config (`server/home-assistant.ts`). A shared HA WebSocket `subscribe_entities`
@@ -184,6 +198,9 @@ commits and PR descriptions are written in normal prose.
 
 - Mobile browsers keep the `AudioContext` suspended until the first tap, so
   level meters are flat until then; the monitor shows a hint.
+- The feed-lost chime plays only through an already running `AudioContext`; it
+  never calls `resume()` itself because that needs a user gesture. On a tablet
+  that nobody has tapped since boot, the alert is only the banner and vibration.
 - Unmuting must happen synchronously inside the tap handler, or iOS blocks
   audio. `CameraTile.vue` unmutes the `<video>` in its click handler before
   updating the store; don't move that into a watcher.

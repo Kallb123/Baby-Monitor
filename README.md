@@ -22,6 +22,11 @@ monitor.
   codecs, hide individual cameras from this device's
   monitor without deleting them, and shows the Home Assistant URL and whether
   the server can reach Home Assistant.
+- Warns when a camera feed stays down: after 30 seconds without video a banner
+  names the camera and how long it has been lost, with a Dismiss button, and a
+  soft chime plays and the device vibrates, repeating every minute until the
+  feed returns or you dismiss it. The chime needs one tap on the page first, as
+  for any sound, and both the banner and the chime can be turned off in Settings.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.

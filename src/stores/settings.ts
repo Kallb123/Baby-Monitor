@@ -13,6 +13,8 @@ const storedSettingsSchema = z.object({
   showStreamDetails: z.boolean().optional(),
   hiddenCameraIds: z.array(z.string()).optional(),
   stirringSensitivity: z.record(z.string(), z.enum(SENSITIVITIES)).optional(),
+  feedLostAlerts: z.boolean().optional(),
+  feedLostSound: z.boolean().optional(),
 })
 
 /**
@@ -29,6 +31,10 @@ export const useSettingsStore = defineStore('settings', () => {
    * stream is opened for them. May hold ids of cameras deleted since.
    */
   const hiddenCameraIds = ref<string[]>([...new Set(stored.hiddenCameraIds)])
+  /** Warn when a camera feed stays down. On by default: a silent dead feed is the worst failure. */
+  const feedLostAlerts = ref(stored.feedLostAlerts ?? true)
+  /** Chime and vibrate for a lost feed; the banner shows either way. */
+  const feedLostSound = ref(stored.feedLostSound ?? true)
   const hiddenSet = computed(() => new Set(hiddenCameraIds.value))
   /**
    * How easily each camera's tile reads "Stirring". Only non-default choices
@@ -39,13 +45,22 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // One write for every field: saving a single one would drop the others.
   watch(
-    [showDecibels, showStreamDetails, hiddenCameraIds, stirringSensitivity],
-    ([decibels, details, hidden, sensitivity]) =>
+    [
+      showDecibels,
+      showStreamDetails,
+      hiddenCameraIds,
+      stirringSensitivity,
+      feedLostAlerts,
+      feedLostSound,
+    ],
+    ([decibels, details, hidden, sensitivity, lostAlerts, lostSound]) =>
       writeStored(SETTINGS_STORAGE_KEY, {
         showDecibels: decibels,
         showStreamDetails: details,
         hiddenCameraIds: hidden,
         stirringSensitivity: sensitivity,
+        feedLostAlerts: lostAlerts,
+        feedLostSound: lostSound,
       }),
   )
 
@@ -55,6 +70,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function setShowStreamDetails(on: boolean) {
     showStreamDetails.value = on
+  }
+
+  function setFeedLostAlerts(on: boolean) {
+    feedLostAlerts.value = on
+  }
+
+  function setFeedLostSound(on: boolean) {
+    feedLostSound.value = on
   }
 
   function isCameraHidden(cameraId: string) {
@@ -99,8 +122,12 @@ export const useSettingsStore = defineStore('settings', () => {
     showStreamDetails,
     hiddenCameraIds,
     stirringSensitivity,
+    feedLostAlerts,
+    feedLostSound,
     setShowDecibels,
     setShowStreamDetails,
+    setFeedLostAlerts,
+    setFeedLostSound,
     isCameraHidden,
     setCameraHidden,
     pruneHiddenCameras,
