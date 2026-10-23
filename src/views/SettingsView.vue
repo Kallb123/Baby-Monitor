@@ -23,8 +23,8 @@ const streamQualityName = useId()
 
 const streamQualityOptions: { value: StreamQualityPreference; label: string }[] = [
   { value: 'auto', label: 'Auto' },
-  { value: 'main', label: 'Always main' },
-  { value: 'sub', label: 'Always sub-stream' },
+  { value: 'main', label: 'Main' },
+  { value: 'sub', label: 'Sub-stream' },
 ]
 
 // This page can be the first one opened (a reload on /settings), before the
@@ -367,45 +367,6 @@ const homeAssistant = computed(() => {
   min-width: 0;
 }
 
-.segments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.segment {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 18px;
-  border-radius: var(--radius-pill);
-  background: var(--color-neutral-800);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.segment input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.segment:has(input:checked) {
-  background: var(--color-accent);
-  color: var(--color-neutral-100);
-}
-
-.segment:has(input:focus-visible) {
-  outline: 2px solid var(--color-accent-400);
-  outline-offset: 2px;
-}
-
 .row-text,
 .row-value {
   display: flex;
@@ -528,6 +489,7 @@ const homeAssistant = computed(() => {
 .segments {
   display: flex;
   flex: none;
+  align-self: flex-start;
   padding: 4px;
   border-radius: var(--radius-pill);
   background: var(--color-neutral-800);
