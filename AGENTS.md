@@ -32,10 +32,44 @@ Data flow:
   go2rtc (`server/go2rtc.ts`) under the camera id. The client opens a
   receive-only `RTCPeerConnection` and exchanges SDP through
   `POST /api/streams/:id/webrtc` (`src/composables/useWebRtcStream.ts`).
+  A camera may also have a `subRtspUrl`, registered as `<id>.sub`
+  (`streamName()` in `shared/streams.ts`). The client asks for `?quality=main|sub`;
+  `src/lib/stream-quality.ts` picks it from the tile's physical width with
+  hysteresis (or the per-device Stream quality setting), and
+  `useStreamQuality` debounces changes and makes the first decision before the
+  stream connects. The server falls back to main when there is no sub-stream.
+  Quality switches are make-before-break: the old connection keeps playing
+  until the new one is `connected`, so an audible tile doesn't drop out. A
+  sub-stream that fails 3 attempts in a row, or connects without audio, falls
+  back to main (`nextSubHealth`) until the sub URL or the preference changes.
 - **Level meter**: `src/composables/useAudioLevel.ts` taps each stream's audio
   track with one shared `AudioContext` (`src/lib/audio-context.ts`). Analysis
-  nodes are never connected to the speakers. Audibility is controlled only by
-  the `<video>` element's `muted` flag, driven by `useMonitorStore().audioCameraId`.
+  nodes are never connected to the speakers, except the feed-lost chime
+  (`src/lib/alert-sound.ts`), which disconnects its nodes when done. Stream
+  audibility is controlled only by the `<video>` element's `muted` flag, driven
+  by `useMonitorStore().audioCameraId`.
+  "Stirring" (`src/composables/useStirring.ts`) compares the smoothed dB with an
+  adaptive threshold: the room's background (`src/lib/noise-floor.ts`, the 10th
+  percentile of per-second minimums over 120 s, unknown for the first ~15 s)
+  plus a per-sensitivity margin, never below a per-sensitivity minimum
+  (`stirringThresholdDb` in `src/lib/sound-status.ts`). Medium's minimum is the
+  old fixed -43 dBFS. The floor resets when the playing stream switches between
+  main and sub, since their gains differ.
+- **Feed-lost alerts**: every `CameraTile` reports its stream status through
+  `useFeedAlertReporting` to the transient `useFeedAlertsStore`
+  (`src/stores/feed-alerts.ts`), which records when each camera went down (any
+  status but `live`, including never connected). Unmounted tiles are forgotten,
+  so hidden or deleted cameras never alert. After
+  `FEED_LOST_AFTER_MS` (`src/lib/feed-alerts.ts`, 30 s) the feed counts as lost:
+  `FeedAlertBanner.vue` (in the page flow under the header, `role="alert"`) lists
+  it with a per-camera Dismiss, which holds until the feed returns and drops
+  again. `useFeedAlertSound` chimes and vibrates when a feed is lost, then every
+  60 s until all are dismissed or restored. The store's 1 s ticker runs only
+  while a camera is down. The `feedLostAlerts` and `feedLostSound` settings are
+  per device. Alerts, the chime and sound-history recording only run while the
+  monitor view is open: opening `/settings` or `/history` unmounts the tiles,
+  which closes their streams, so a device left on another page gets no alerts
+  and the 30 s clock restarts when it returns to the monitor.
 - **Home Assistant**: the server holds `HA_TOKEN` and exposes
   `GET /api/ha/states`, which returns only the entities referenced in the saved
   config (`server/home-assistant.ts`). A shared HA WebSocket `subscribe_entities`
@@ -55,16 +89,32 @@ Data flow:
   open `CameraDialog.vue`, which validates with the shared schema and saves
   the whole config through the config store.
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
-  such as the dB readout and which cameras to hide, kept in `localStorage` by
-  `useSettingsStore` (not on the server, for the same reason as the layout),
-  plus read-only server settings and a live Home Assistant check from
-  `GET /api/system`.
+  such as the dB readout (which also shows the learned background, `bg -38`),
+  the stream details overlay, Stream quality (Auto, Main or Sub-stream), the
+  Alerts toggles (feed-lost banner, chime and vibration), which cameras to hide
+  and each camera's Stirring sensitivity (Low, Medium or High), kept in
+  `localStorage` by `useSettingsStore` (not on the server, for the same reason
+  as the layout), plus read-only server settings and a live Home Assistant
+  check from `GET /api/system`.
+- **History** (`/history`, `HistoryView.vue`, opened from the header's clock
+  icon): crying comes from HA's recorder through `GET /api/ha/history`
+  (`HomeAssistantClient.getHistory`, converted by `server/cry-history.ts`), so
+  the server stores nothing. Sound level and stirring are recorded on each
+  device, once a second per live tile, into per-minute buckets
+  `[minuteStartMs, peakDb, stirred]` kept for 24 h in `localStorage`
+  (`src/lib/sound-history.ts`, `useSoundHistoryStore`, written at most once a
+  minute and on `pagehide`; `useSoundHistoryRecording` is called from
+  `CameraTile.vue`). Recording stops while the history page is open because the
+  tiles are unmounted. `SoundTimeline.vue` draws the SVG, with geometry in
+  `src/lib/history-chart.ts`.
 - **Hidden cameras**: `MonitorView.vue` passes the grid only the cameras
   `visibleCameras()` (`src/lib/cameras.ts`) keeps, so a hidden camera has no
   tile, no WebRTC connection and no audio tap. Hiding the audio camera stops
   its audio; a hidden focus camera falls back to the first visible one without
   overwriting the saved choice. If all are hidden the monitor points to
-  Settings. Ids of deleted cameras are pruned once the config has loaded.
+  Settings. Ids of deleted cameras are pruned once the config has loaded: from
+  the hidden list and stirring sensitivities (`useSettingsStore`) and from the
+  recorded sound history (`soundHistory.pruneDeletedCameras`).
 
 ### API
 
@@ -74,9 +124,10 @@ Data flow:
 | GET    | `/api/config`             | Current config                                                      |
 | PUT    | `/api/config`             | Validate, persist and return the config; 400 with `issues` on error |
 | GET    | `/api/ha/states`          | States of entities referenced by the config                         |
+| GET    | `/api/ha/history?hours=N` | Crying intervals per camera from HA history (N 1–24, default 12)    |
 | GET    | `/api/ha/events`          | SSE snapshots of configured entities, with heartbeat events         |
 | GET    | `/api/system`             | HA URL (credentials stripped), live HA check, go2rtc URL            |
-| POST   | `/api/streams/:id/webrtc` | Body: SDP offer (`application/sdp`). Returns SDP answer             |
+| POST   | `/api/streams/:id/webrtc` | Body: SDP offer. `?quality=main\|sub` (default main). SDP answer    |
 
 ## Commands
 
@@ -175,6 +226,9 @@ commits and PR descriptions are written in normal prose.
 
 - Mobile browsers keep the `AudioContext` suspended until the first tap, so
   level meters are flat until then; the monitor shows a hint.
+- The feed-lost chime plays only through an already running `AudioContext`; it
+  never calls `resume()` itself because that needs a user gesture. On a tablet
+  that nobody has tapped since boot, the alert is only the banner and vibration.
 - Unmuting must happen synchronously inside the tap handler, or iOS blocks
   audio. `CameraTile.vue` unmutes the `<video>` in its click handler before
   updating the store; don't move that into a watcher.

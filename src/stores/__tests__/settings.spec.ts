@@ -83,6 +83,10 @@ describe('settings store', () => {
       showDecibels: true,
       showStreamDetails: false,
       hiddenCameraIds: ['nursery'],
+      stirringSensitivity: {},
+      feedLostAlerts: true,
+      feedLostSound: true,
+      streamQuality: 'auto',
     })
 
     setActivePinia(createPinia())
@@ -115,5 +119,109 @@ describe('settings store', () => {
     settings.pruneHiddenCameras(['nursery', 'cot'])
     await nextTick()
     expect(settings.hiddenCameraIds).toEqual(['nursery'])
+  })
+
+  it('defaults every camera to medium stirring sensitivity', () => {
+    const settings = useSettingsStore()
+    expect(settings.sensitivityFor('nursery')).toBe('medium')
+    expect(settings.stirringSensitivity).toEqual({})
+  })
+
+  it('remembers stirring sensitivity per camera on this device', async () => {
+    const settings = useSettingsStore()
+    settings.setSensitivity('nursery', 'high')
+    settings.setSensitivity('cot', 'low')
+    settings.setSensitivity('cot', 'medium')
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.sensitivityFor('nursery')).toBe('high')
+    expect(reloaded.sensitivityFor('cot')).toBe('medium')
+    expect(reloaded.stirringSensitivity).toEqual({ nursery: 'high' })
+  })
+
+  it('keeps other settings when sensitivity is saved, and the reverse', async () => {
+    localStorage.setItem(
+      'baby-monitor:settings',
+      '{"showDecibels":true,"hiddenCameraIds":["cot"],"stirringSensitivity":{"nursery":"low"}}',
+    )
+    const settings = useSettingsStore()
+    expect(settings.sensitivityFor('nursery')).toBe('low')
+    settings.setSensitivity('nursery', 'high')
+    await nextTick()
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.showDecibels).toBe(true)
+    expect(reloaded.hiddenCameraIds).toEqual(['cot'])
+    expect(reloaded.sensitivityFor('nursery')).toBe('high')
+
+    reloaded.setShowDecibels(false)
+    await nextTick()
+    setActivePinia(createPinia())
+    expect(useSettingsStore().sensitivityFor('nursery')).toBe('high')
+  })
+
+  it('ignores a corrupt sensitivity list', () => {
+    localStorage.setItem('baby-monitor:settings', '{"stirringSensitivity":{"nursery":"loud"}}')
+    expect(useSettingsStore().sensitivityFor('nursery')).toBe('medium')
+  })
+
+  it('forgets stirring sensitivity of cameras that were deleted', async () => {
+    const settings = useSettingsStore()
+    settings.setSensitivity('nursery', 'high')
+    settings.setSensitivity('gone', 'low')
+    settings.pruneStirringSensitivity(['nursery', 'cot'])
+    await nextTick()
+    expect(settings.stirringSensitivity).toEqual({ nursery: 'high' })
+
+    setActivePinia(createPinia())
+    expect(useSettingsStore().sensitivityFor('gone')).toBe('medium')
+  })
+
+  it('turns feed-lost alerts and their sound on by default, and remembers changes', async () => {
+    const settings = useSettingsStore()
+    expect(settings.feedLostAlerts).toBe(true)
+    expect(settings.feedLostSound).toBe(true)
+
+    settings.setFeedLostAlerts(false)
+    settings.setFeedLostSound(false)
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.feedLostAlerts).toBe(false)
+    expect(reloaded.feedLostSound).toBe(false)
+  })
+
+  it('keeps feed-lost alerts on in older saves that predate them', () => {
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true}')
+    const settings = useSettingsStore()
+    expect(settings.feedLostAlerts).toBe(true)
+    expect(settings.feedLostSound).toBe(true)
+  })
+
+  it('chooses the stream quality automatically by default, including for older saves', () => {
+    expect(useSettingsStore().streamQuality).toBe('auto')
+    setActivePinia(createPinia())
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true}')
+    expect(useSettingsStore().streamQuality).toBe('auto')
+  })
+
+  it('remembers the stream quality on this device without losing other settings', async () => {
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true,"hiddenCameraIds":["cot"]}')
+    useSettingsStore().setStreamQuality('sub')
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.streamQuality).toBe('sub')
+    expect(reloaded.showDecibels).toBe(true)
+    expect(reloaded.hiddenCameraIds).toEqual(['cot'])
+  })
+
+  it('ignores an unknown stored stream quality', () => {
+    localStorage.setItem('baby-monitor:settings', '{"streamQuality":"huge"}')
+    expect(useSettingsStore().streamQuality).toBe('auto')
   })
 })

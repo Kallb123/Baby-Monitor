@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import CameraDialog from '@/components/CameraDialog.vue'
 import CameraGrid from '@/components/CameraGrid.vue'
+import FeedAlertBanner from '@/components/FeedAlertBanner.vue'
 import MonitorHeader from '@/components/MonitorHeader.vue'
 import { useEntityStates } from '@/composables/useEntityStates'
 import { audioUnlocked } from '@/lib/audio-context'
@@ -13,11 +14,13 @@ import { statusLine } from '@/lib/status-line'
 import { useConfigStore } from '@/stores/config'
 import { useMonitorStore } from '@/stores/monitor'
 import { useSettingsStore } from '@/stores/settings'
+import { useSoundHistoryStore } from '@/stores/sound-history'
 import { referencedEntityIds } from '@shared/config.ts'
 
 const configStore = useConfigStore()
 const monitor = useMonitorStore()
 const settings = useSettingsStore()
+const soundHistory = useSoundHistoryStore()
 const { states, configured: haConfigured, error: statesError } = useEntityStates()
 
 const CONFIG_RETRY_MS = 5000
@@ -58,12 +61,15 @@ watch(visible, (now) => {
   if (now.length === 0) monitor.setEditing(false)
 })
 
-// Forget hidden ids of deleted cameras, but only once the real config is in:
+// Forget per-camera settings of deleted cameras, but only once the real config is in:
 // the empty default must not wipe the list.
 watch(
   () => configStore.loaded && cameras.value.map((c) => c.id),
   (ids) => {
-    if (ids) settings.pruneHiddenCameras(ids)
+    if (!ids) return
+    settings.pruneHiddenCameras(ids)
+    settings.pruneStirringSensitivity(ids)
+    soundHistory.pruneDeletedCameras(ids)
   },
   { immediate: true },
 )
@@ -120,6 +126,8 @@ function openAdd() {
       @add="openAdd"
     />
 
+    <FeedAlertBanner />
+
     <main class="content">
       <div v-if="configStore.error && !configStore.loaded" class="card" role="alert">
         <h2 class="card-title">Can't reach the monitor</h2>
@@ -152,6 +160,8 @@ function openAdd() {
         :editing="monitor.editing"
         :show-decibels="settings.showDecibels"
         :show-stream-details="settings.showStreamDetails"
+        :stirring-sensitivity="settings.stirringSensitivity"
+        :stream-quality="settings.streamQuality"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

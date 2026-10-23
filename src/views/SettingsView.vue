@@ -5,7 +5,9 @@ import { RouterLink } from 'vue-router'
 import type { HomeAssistantStatus } from '@shared/api.ts'
 import AppIcon from '@/components/AppIcon.vue'
 import { useSystemInfo } from '@/composables/useSystemInfo'
+import { SENSITIVITIES, sensitivityLabels } from '@/lib/sound-status'
 import { useConfigStore } from '@/stores/config'
+import type { StreamQualityPreference } from '@/lib/stream-quality'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
@@ -13,7 +15,20 @@ const configStore = useConfigStore()
 const { info, error } = useSystemInfo()
 const decibelsLabelId = useId()
 const streamDetailsLabelId = useId()
+const feedAlertsLabelId = useId()
+const feedSoundLabelId = useId()
+// One prefix per section: camera ids are user-chosen, so a shared prefix could
+// make one camera's id in a section equal another camera's id in the other.
 const cameraLabelPrefix = useId()
+const stirringLabelPrefix = useId()
+const streamQualityLabelId = useId()
+const streamQualityName = useId()
+
+const streamQualityOptions: { value: StreamQualityPreference; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'main', label: 'Main' },
+  { value: 'sub', label: 'Sub-stream' },
+]
 
 // This page can be the first one opened (a reload on /settings), before the
 // monitor has loaded the camera list.
@@ -94,6 +109,69 @@ const homeAssistant = computed(() => {
             <span class="switch-knob" />
           </button>
         </div>
+        <div class="row stacked" role="radiogroup" :aria-labelledby="streamQualityLabelId">
+          <span :id="streamQualityLabelId" class="row-label">Stream quality</span>
+          <span class="row-help">
+            Auto plays a camera's lower-resolution sub-stream in small tiles and its main stream in
+            large ones. This only applies to cameras with a sub-stream address.
+          </span>
+          <div class="segments">
+            <label v-for="option in streamQualityOptions" :key="option.value" class="segment">
+              <input
+                type="radio"
+                :name="streamQualityName"
+                :value="option.value"
+                :checked="settings.streamQuality === option.value"
+                @change="settings.setStreamQuality(option.value)"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="alerts-heading">
+        <h2 id="alerts-heading" class="card-title">Alerts</h2>
+        <p class="card-note">Saved on this device only.</p>
+
+        <div class="row">
+          <div class="row-text">
+            <span :id="feedAlertsLabelId" class="row-label">Warn when a feed is lost</span>
+            <span class="row-help">
+              Shows a banner when a camera has been disconnected for 30 seconds, until it comes back
+              or you dismiss it.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            :aria-checked="settings.feedLostAlerts"
+            :aria-labelledby="feedAlertsLabelId"
+            @click="settings.setFeedLostAlerts(!settings.feedLostAlerts)"
+          >
+            <span class="switch-knob" />
+          </button>
+        </div>
+        <div class="row">
+          <div class="row-text">
+            <span :id="feedSoundLabelId" class="row-label">Chime and vibrate</span>
+            <span class="row-help">
+              Plays a soft chime and vibrates when a feed is lost, then repeats every minute. The
+              chime needs a tap on the page first, as for any sound.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            :aria-checked="settings.feedLostSound"
+            :aria-labelledby="feedSoundLabelId"
+            @click="settings.setFeedLostSound(!settings.feedLostSound)"
+          >
+            <span class="switch-knob" />
+          </button>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="cameras-heading">
@@ -113,10 +191,10 @@ const homeAssistant = computed(() => {
         <template v-else>
           <div v-for="camera in configStore.config.cameras" :key="camera.id" class="row">
             <div class="row-text">
-              <span :id="`${cameraLabelPrefix}-${camera.id}`" class="row-label">{{
+              <span :id="`${cameraLabelPrefix}-label-${camera.id}`" class="row-label">{{
                 camera.name
               }}</span>
-              <span :id="`${cameraLabelPrefix}-${camera.id}-help`" class="row-help">
+              <span :id="`${cameraLabelPrefix}-help-${camera.id}`" class="row-help">
                 Show on monitor
               </span>
             </div>
@@ -125,13 +203,52 @@ const homeAssistant = computed(() => {
               class="switch"
               role="switch"
               :aria-checked="!settings.isCameraHidden(camera.id)"
-              :aria-labelledby="`${cameraLabelPrefix}-${camera.id} ${cameraLabelPrefix}-${camera.id}-help`"
+              :aria-labelledby="`${cameraLabelPrefix}-label-${camera.id} ${cameraLabelPrefix}-help-${camera.id}`"
               @click="settings.setCameraHidden(camera.id, !settings.isCameraHidden(camera.id))"
             >
               <span class="switch-knob" />
             </button>
           </div>
         </template>
+      </section>
+
+      <section
+        v-if="configStore.loaded && configStore.config.cameras.length > 0"
+        class="card"
+        aria-labelledby="stirring-heading"
+      >
+        <h2 id="stirring-heading" class="card-title">Stirring sensitivity</h2>
+        <p class="card-note">
+          Stirring is measured against each room's background noise, so steady sounds like a
+          white-noise machine are ignored after a minute or two. Higher reacts to quieter sounds.
+          Saved on this device only.
+        </p>
+
+        <div
+          v-for="camera in configStore.config.cameras"
+          :key="camera.id"
+          class="row sensitivity-row"
+        >
+          <span :id="`${stirringLabelPrefix}-${camera.id}`" class="row-label">{{
+            camera.name
+          }}</span>
+          <div
+            class="segments"
+            role="radiogroup"
+            :aria-labelledby="`${stirringLabelPrefix}-${camera.id}`"
+          >
+            <label v-for="option in SENSITIVITIES" :key="option" class="segment">
+              <input
+                type="radio"
+                :name="`${stirringLabelPrefix}-${camera.id}`"
+                :value="option"
+                :checked="settings.sensitivityFor(camera.id) === option"
+                @change="settings.setSensitivity(camera.id, option)"
+              />
+              <span>{{ sensitivityLabels[option] }}</span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="system-heading">
@@ -246,6 +363,13 @@ const homeAssistant = computed(() => {
   border-top: 1px solid var(--color-divider);
 }
 
+.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
 .row-text,
 .row-value {
   display: flex;
@@ -355,6 +479,59 @@ const homeAssistant = computed(() => {
   transform: translateX(24px);
 }
 
+/* Wraps on narrow phones so a long camera name keeps room beside the control. */
+.sensitivity-row {
+  flex-wrap: wrap;
+}
+
+.sensitivity-row .row-label {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.segments {
+  display: flex;
+  flex: none;
+  align-self: flex-start;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-800);
+}
+
+.segment {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 72px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+/* The native radio stays for keyboard and screen-reader behaviour. */
+.segment input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segment:has(input:checked) {
+  background: var(--color-accent);
+  color: var(--color-neutral-100);
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+}
+
 @media (max-width: 560px) {
   .card {
     padding: 20px 20px 4px;
@@ -364,11 +541,17 @@ const homeAssistant = computed(() => {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
+
+  .segment {
+    min-width: 60px;
+    padding: 0 8px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .switch,
-  .switch-knob {
+  .switch-knob,
+  .segment {
     transition: none;
   }
 }

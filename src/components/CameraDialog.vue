@@ -38,6 +38,7 @@ const entityFields = [
 const form = reactive({
   name: existing?.name ?? '',
   rtspUrl: existing?.rtspUrl ?? '',
+  subRtspUrl: existing?.subRtspUrl ?? '',
   entities: { ...existing?.entities } as Record<keyof CameraEntities, string | undefined>,
 })
 const errors = ref<Record<string, string>>({})
@@ -69,7 +70,8 @@ function buildCamera(): Camera {
       name,
       configStore.config.cameras.map((c) => c.id),
     )
-  return { id, name, rtspUrl: form.rtspUrl.trim(), entities }
+  const subRtspUrl = form.subRtspUrl.trim()
+  return { id, name, rtspUrl: form.rtspUrl.trim(), ...(subRtspUrl && { subRtspUrl }), entities }
 }
 
 function fieldErrors(issues: { path: PropertyKey[]; message: string }[]) {
@@ -167,6 +169,23 @@ async function remove() {
           spellcheck="false"
         />
         <small v-if="errors.rtspUrl" class="error">{{ errors.rtspUrl }}</small>
+      </label>
+
+      <label class="field">
+        <span>Sub-stream address (RTSP, optional)</span>
+        <input
+          v-model="form.subRtspUrl"
+          class="input"
+          inputmode="url"
+          placeholder="rtsp://user:pass@192.168.1.20:554/stream2"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+        <small v-if="errors.subRtspUrl" class="error">{{ errors.subRtspUrl }}</small>
+        <small v-else class="hint">
+          A lower-resolution stream from the same camera, used for small tiles.
+        </small>
       </label>
 
       <details class="sensors" :open="sensorsOpen || undefined">
@@ -295,6 +314,11 @@ async function remove() {
 
 .sensors .field {
   margin-top: 14px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .error {

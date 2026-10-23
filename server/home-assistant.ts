@@ -1,4 +1,5 @@
 import type { EntityState } from '../shared/api.ts'
+import type { HistoryPoint } from './cry-history.ts'
 
 export interface HomeAssistantOptions {
   baseUrl: string
@@ -13,6 +14,12 @@ interface HaStateBody {
   state: string
   last_changed: string
   attributes?: { unit_of_measurement?: string; friendly_name?: string }
+}
+
+interface HaHistoryItem {
+  state?: unknown
+  last_changed?: unknown
+  last_updated?: unknown
 }
 
 interface CompressedEntity {
@@ -230,6 +237,63 @@ export class HomeAssistantClient {
       else if (result.value) states[result.value.entityId] = result.value
     }
     return { states, errors }
+  }
+
+  /**
+   * State changes of the given entities between `from` and `to`, from HA's own
+   * recorder. Entities with no history are left out. Throws a message that never
+   * contains the URL or token, so callers can log it.
+   */
+  async getHistory(
+    entityIds: string[],
+    from: Date,
+    to: Date,
+  ): Promise<Record<string, HistoryPoint[]>> {
+    if (entityIds.length === 0) return {}
+    // Entity ids are validated against a strict pattern in the config schema, so
+    // joining them with commas is safe.
+    const url =
+      `${this.baseUrl}/api/history/period/${encodeURIComponent(from.toISOString())}` +
+      `?filter_entity_id=${entityIds.join(',')}` +
+      `&end_time=${encodeURIComponent(to.toISOString())}&minimal_response&no_attributes`
+    let response: Response
+    try {
+      response = await this.#fetch(url, {
+        headers: { Authorization: `Bearer ${this.#token}` },
+        signal: AbortSignal.timeout(this.#timeoutMs),
+      })
+    } catch (error) {
+      throw new Error(`Home Assistant history request failed: ${fetchFailureReason(error)}`)
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {})
+      throw new Error(`Home Assistant responded ${response.status} for history`)
+    }
+    let body: unknown
+    try {
+      body = await response.json()
+    } catch {
+      throw new Error('Home Assistant history response was not JSON')
+    }
+    if (!Array.isArray(body)) throw new Error('Home Assistant history response was malformed')
+
+    const wanted = new Set(entityIds)
+    const history: Record<string, HistoryPoint[]> = {}
+    for (const list of body as unknown[]) {
+      if (!Array.isArray(list)) continue
+      // With minimal_response only the first item of each list carries entity_id.
+      const entityId = (list[0] as { entity_id?: unknown } | undefined)?.entity_id
+      if (typeof entityId !== 'string' || !wanted.has(entityId)) continue
+      const points: HistoryPoint[] = []
+      for (const item of list as (HaHistoryItem | undefined)[]) {
+        const lastChanged = item?.last_changed ?? item?.last_updated
+        if (typeof item?.state === 'string' && typeof lastChanged === 'string') {
+          points.push({ state: item.state, lastChanged })
+        }
+      }
+      history[entityId] = points
+    }
+    return history
   }
 
   /**

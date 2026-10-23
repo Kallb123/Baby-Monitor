@@ -5,6 +5,8 @@ import type { EntityState } from '@shared/api.ts'
 import type { Camera, LayoutMode } from '@shared/config.ts'
 import { useElementSize } from '@/composables/useElementSize'
 import { bestGrid } from '@/lib/layout'
+import { DEFAULT_SENSITIVITY, type Sensitivity } from '@/lib/sound-status'
+import type { StreamQualityPreference } from '@/lib/stream-quality'
 import CameraTile from './CameraTile.vue'
 
 const props = defineProps<{
@@ -16,6 +18,9 @@ const props = defineProps<{
   editing: boolean
   showDecibels: boolean
   showStreamDetails: boolean
+  /** Per-camera stirring sensitivity; cameras without an entry use the default. */
+  stirringSensitivity: Record<string, Sensitivity>
+  streamQuality: StreamQualityPreference
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +69,8 @@ const gridStyle = computed(() => {
       :editing="editing"
       :show-decibels="showDecibels"
       :show-stream-details="showStreamDetails"
+      :stirring-sensitivity="stirringSensitivity[camera.id] ?? DEFAULT_SENSITIVITY"
+      :stream-quality="streamQuality"
       @audio="(on) => emit('audio', camera.id, on)"
       @edit="emit('edit', camera.id)"
     />

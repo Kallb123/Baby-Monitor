@@ -10,15 +10,38 @@ monitor.
 - Every stream has a live sound-level meter, so you can see noise even while
   its audio is muted.
 - A tile glows and shows a "Crying" badge when Home Assistant reports crying,
-  and reads "Stirring" while its sound level is raised. Temperature and
-  humidity come from Home Assistant too.
+  and reads "Stirring" while its sound is well above that room's background
+  noise, which it learns over the last couple of minutes, so a white-noise
+  machine doesn't keep it stirring all night. Sensitivity (low, medium, high)
+  is set per camera in settings. Temperature and humidity come from Home
+  Assistant too.
+- Optional low-resolution sub-streams: a camera with a sub-stream address
+  plays it in small tiles (and focus-layout thumbnails) and its main stream in
+  large ones, cutting decode load and bandwidth on older tablets. If a tile's
+  sub-stream won't connect or has no audio, the app falls back to the main
+  stream for that tile.
 - Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
   camera.
 - A settings page (the gear in the header) can show each meter's level in
   decibels (dBFS), overlay each feed's received resolution, frame rate and video/audio
   codecs, hide individual cameras from this device's
-  monitor without deleting them, and shows the Home Assistant URL and whether
-  the server can reach Home Assistant.
+  monitor without deleting them, choose between automatic, always-main and
+  always-sub-stream playback, turn the feed-lost banner and chime on or off,
+  set each camera's stirring sensitivity, and shows the Home Assistant URL and
+  whether the server can reach Home Assistant.
+- Warns when a camera feed stays down: after 30 seconds without video a banner
+  names the camera and how long it has been lost, with a Dismiss button, and a
+  soft chime plays and the device vibrates, repeating every minute until the
+  feed returns or you dismiss it. The chime needs one tap on the page first, as
+  for any sound, and both the banner and the chime can be turned off in Settings.
+  Alerts only run while the monitor page is open, not on Settings or History.
+- A history page (the clock icon in the header) charts the last 6, 12 or 24
+  hours per camera: the loudest sound each minute, minutes with stirring and
+  crying episodes, with a list of when it cried and for how long. Crying comes
+  from Home Assistant's own history (nothing extra to store on the server).
+  Sound levels are recorded in this device's browser while the monitor is
+  open, so a device that was closed or asleep shows blank stretches, and each
+  device only sees its own.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.
@@ -197,9 +220,21 @@ For each camera you set:
 | ------------------------- | ------------------------------------------- |
 | Camera name               | `Nursery`                                   |
 | Stream address (RTSP)     | `rtsp://user:pass@192.168.1.20:554/stream1` |
+| Sub-stream address (RTSP) | `rtsp://user:pass@192.168.1.20:554/stream2` |
 | Cry detection (HA sensor) | `binary_sensor.nursery_crying`              |
 | Temperature (HA sensor)   | `sensor.nursery_temperature`                |
 | Humidity (HA sensor)      | `sensor.nursery_humidity`                   |
+
+The sub-stream address is optional: a lower-resolution stream from the same
+camera, registered with go2rtc as `<camera id>.sub`. With **Stream quality** set
+to Auto on the settings page (saved per device), a tile plays it while it is
+under about 960 physical pixels wide (CSS width × device pixel ratio) and
+switches to the main stream above 1280, with a 2 second delay so rotating the
+device doesn't cause reconnects. Cameras without a sub-stream address always play
+their main stream. Turn on **Stream details** to see which one a tile is playing.
+The sub-stream should carry audio too: the level meter, stirring and history
+need it on small tiles, and a tile whose sub-stream has no audio falls back to
+the main stream.
 
 The camera id, which is also its go2rtc stream name, is derived from the name
 when the camera is added (`Maya's room` → `maya-s-room`) and never changes.
@@ -263,7 +298,7 @@ This is designed for a trusted home network.
 ## Roadmap
 
 - Local, in-browser cry detection fallback from the audio level.
-- Remove go2rtc streams for deleted cameras.
+- Remove go2rtc streams for deleted cameras and cleared sub-streams.
 - Optional app login / PIN.
 
 ## Contributing

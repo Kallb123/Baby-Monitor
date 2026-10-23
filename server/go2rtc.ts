@@ -1,4 +1,5 @@
 import type { Camera } from '../shared/config.ts'
+import { streamName } from '../shared/streams.ts'
 
 export interface Go2rtcOptions {
   baseUrl: string
@@ -9,7 +10,8 @@ export interface Go2rtcOptions {
  * Thin wrapper around the go2rtc HTTP API (https://github.com/AlexxIT/go2rtc).
  *
  * Browsers cannot play RTSP, so go2rtc pulls each camera's RTSP feed and
- * re-serves it as WebRTC. Each camera id doubles as its go2rtc stream name.
+ * re-serves it as WebRTC. Each camera id doubles as its go2rtc stream name
+ * (see `streamName` for the sub-stream's).
  */
 export class Go2rtcClient {
   readonly baseUrl: string
@@ -20,16 +22,26 @@ export class Go2rtcClient {
     this.#fetch = options.fetch ?? fetch
   }
 
-  /** Registers (or replaces) one go2rtc stream per camera. */
+  /**
+   * Registers (or replaces) the go2rtc streams of every camera: the main one,
+   * plus a sub-stream when the camera has a sub-stream address. Streams of
+   * cleared sub-stream addresses and deleted cameras are not removed.
+   */
   async syncStreams(cameras: Camera[]): Promise<void> {
+    const streams = cameras.flatMap((camera) => [
+      { name: streamName(camera.id, 'main'), src: camera.rtspUrl },
+      ...(camera.subRtspUrl
+        ? [{ name: streamName(camera.id, 'sub'), src: camera.subRtspUrl }]
+        : []),
+    ])
     await Promise.all(
-      cameras.map(async (camera) => {
-        const query = new URLSearchParams({ name: camera.id, src: camera.rtspUrl })
+      streams.map(async ({ name, src }) => {
+        const query = new URLSearchParams({ name, src })
         const response = await this.#fetch(`${this.baseUrl}/api/streams?${query}`, {
           method: 'PUT',
         })
         if (!response.ok) {
-          throw new Error(`go2rtc rejected stream "${camera.id}" (${response.status})`)
+          throw new Error(`go2rtc rejected stream "${name}" (${response.status})`)
         }
       }),
     )

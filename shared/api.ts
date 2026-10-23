@@ -15,6 +15,25 @@ export interface EntityStatesResponse {
   states: Record<string, EntityState>
 }
 
+/** A stretch of crying. `end` is absent while it is still going on. */
+export interface CryInterval {
+  start: string
+  end?: string
+}
+
+export interface CryHistoryResponse {
+  /** False when HA_URL / HA_TOKEN are not set on the server. */
+  configured: boolean
+  /** ISO timestamps of the window the intervals were read for. */
+  from: string
+  to: string
+  /**
+   * Only cameras with a crying entity in the saved config; cameras that share
+   * an entity share its intervals.
+   */
+  cameras: Record<string, { cry: CryInterval[] }>
+}
+
 export interface ApiError {
   error: string
   /** Validation issues, present on 400 responses to config writes. */
