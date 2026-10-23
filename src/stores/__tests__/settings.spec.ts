@@ -83,6 +83,7 @@ describe('settings store', () => {
       showDecibels: true,
       showStreamDetails: false,
       hiddenCameraIds: ['nursery'],
+      streamQuality: 'auto',
     })
 
     setActivePinia(createPinia())
@@ -115,5 +116,29 @@ describe('settings store', () => {
     settings.pruneHiddenCameras(['nursery', 'cot'])
     await nextTick()
     expect(settings.hiddenCameraIds).toEqual(['nursery'])
+  })
+
+  it('chooses the stream quality automatically by default, including for older saves', () => {
+    expect(useSettingsStore().streamQuality).toBe('auto')
+    setActivePinia(createPinia())
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true}')
+    expect(useSettingsStore().streamQuality).toBe('auto')
+  })
+
+  it('remembers the stream quality on this device without losing other settings', async () => {
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true,"hiddenCameraIds":["cot"]}')
+    useSettingsStore().setStreamQuality('sub')
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.streamQuality).toBe('sub')
+    expect(reloaded.showDecibels).toBe(true)
+    expect(reloaded.hiddenCameraIds).toEqual(['cot'])
+  })
+
+  it('ignores an unknown stored stream quality', () => {
+    localStorage.setItem('baby-monitor:settings', '{"streamQuality":"huge"}')
+    expect(useSettingsStore().streamQuality).toBe('auto')
   })
 })

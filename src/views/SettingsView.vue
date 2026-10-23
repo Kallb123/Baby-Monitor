@@ -6,6 +6,7 @@ import type { HomeAssistantStatus } from '@shared/api.ts'
 import AppIcon from '@/components/AppIcon.vue'
 import { useSystemInfo } from '@/composables/useSystemInfo'
 import { useConfigStore } from '@/stores/config'
+import type { StreamQualityPreference } from '@/lib/stream-quality'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
@@ -14,6 +15,14 @@ const { info, error } = useSystemInfo()
 const decibelsLabelId = useId()
 const streamDetailsLabelId = useId()
 const cameraLabelPrefix = useId()
+const streamQualityLabelId = useId()
+const streamQualityName = useId()
+
+const streamQualityOptions: { value: StreamQualityPreference; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'main', label: 'Always main' },
+  { value: 'sub', label: 'Always sub-stream' },
+]
 
 // This page can be the first one opened (a reload on /settings), before the
 // monitor has loaded the camera list.
@@ -93,6 +102,25 @@ const homeAssistant = computed(() => {
           >
             <span class="switch-knob" />
           </button>
+        </div>
+        <div class="row stacked" role="radiogroup" :aria-labelledby="streamQualityLabelId">
+          <span :id="streamQualityLabelId" class="row-label">Stream quality</span>
+          <span class="row-help">
+            Auto plays a camera's lower-resolution sub-stream in small tiles and its main stream in
+            large ones. This only applies to cameras with a sub-stream address.
+          </span>
+          <div class="segments">
+            <label v-for="option in streamQualityOptions" :key="option.value" class="segment">
+              <input
+                type="radio"
+                :name="streamQualityName"
+                :value="option.value"
+                :checked="settings.streamQuality === option.value"
+                @change="settings.setStreamQuality(option.value)"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
         </div>
       </section>
 
@@ -244,6 +272,52 @@ const homeAssistant = computed(() => {
   gap: 16px;
   padding: 16px 0;
   border-top: 1px solid var(--color-divider);
+}
+
+.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.segment {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-800);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.segment input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segment:has(input:checked) {
+  background: var(--color-accent);
+  color: var(--color-neutral-100);
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
 }
 
 .row-text,

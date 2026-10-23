@@ -122,4 +122,56 @@ describe('CameraDialog', () => {
     await wrapper.find('input').trigger('keydown', { key: 'Escape' })
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
+
+  describe('sub-stream address', () => {
+    const subInput = (wrapper: ReturnType<typeof mount>) =>
+      wrapper.find('input[placeholder="rtsp://user:pass@192.168.1.20:554/stream2"]')
+
+    it('explains the optional field', () => {
+      const wrapper = mount(CameraDialog)
+      expect(wrapper.text()).toContain('Sub-stream address (RTSP, optional)')
+      expect(wrapper.text()).toContain('lower-resolution stream')
+    })
+
+    it('saves a trimmed sub-stream address', async () => {
+      const wrapper = mount(CameraDialog, { props: { cameraId: 'nursery' } })
+      await subInput(wrapper).setValue(' rtsp://cam/sub ')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(putBody().cameras[0]?.subRtspUrl).toBe('rtsp://cam/sub')
+    })
+
+    it('leaves the field out when it is blank', async () => {
+      const wrapper = mount(CameraDialog, { props: { cameraId: 'nursery' } })
+      await subInput(wrapper).setValue('   ')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(putBody().cameras[0]).not.toHaveProperty('subRtspUrl')
+    })
+
+    it('clears an existing sub-stream address when the field is emptied', async () => {
+      useConfigStore().config.cameras[0]!.subRtspUrl = 'rtsp://cam/sub'
+      const wrapper = mount(CameraDialog, { props: { cameraId: 'nursery' } })
+      expect((subInput(wrapper).element as HTMLInputElement).value).toBe('rtsp://cam/sub')
+
+      await subInput(wrapper).setValue('')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(putBody().cameras[0]).not.toHaveProperty('subRtspUrl')
+    })
+
+    it('shows the field error and blocks saving for an invalid address', async () => {
+      const wrapper = mount(CameraDialog, { props: { cameraId: 'nursery' } })
+      await subInput(wrapper).setValue('http://cam/sub')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Expected an rtsp:// or rtsps:// URL')
+      expect(wrapper.text()).not.toContain('lower-resolution stream')
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
 })

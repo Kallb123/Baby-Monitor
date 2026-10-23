@@ -176,4 +176,53 @@ describe('SettingsView', () => {
       wrapper.unmount()
     })
   })
+
+  describe('stream quality', () => {
+    const systemInfo: SystemInfoResponse = {
+      homeAssistant: { status: 'unconfigured' },
+      go2rtc: { url: 'http://localhost:1984' },
+    }
+
+    const radio = (wrapper: ReturnType<typeof mountView>, label: string) =>
+      wrapper
+        .findAll('[role="radiogroup"] label')
+        .find((el) => el.text() === label)!
+        .get('input')
+
+    it('offers Auto, Always main and Always sub-stream, with Auto chosen by default', () => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      const wrapper = mountView()
+      const group = wrapper.get('[role="radiogroup"]')
+      expect(group.findAll('label').map((el) => el.text())).toEqual([
+        'Auto',
+        'Always main',
+        'Always sub-stream',
+      ])
+      expect((radio(wrapper, 'Auto').element as HTMLInputElement).checked).toBe(true)
+      expect(group.text()).toContain('only applies to cameras with a sub-stream address')
+      wrapper.unmount()
+    })
+
+    it('labels the group and saves the choice on this device', async () => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      const wrapper = mountView()
+      const labelId = wrapper.get('[role="radiogroup"]').attributes('aria-labelledby')!
+      expect(wrapper.get(`[id="${labelId}"]`).text()).toBe('Stream quality')
+
+      await radio(wrapper, 'Always sub-stream').setValue(true)
+      expect(useSettingsStore().streamQuality).toBe('sub')
+      await radio(wrapper, 'Always main').setValue(true)
+      expect(useSettingsStore().streamQuality).toBe('main')
+      wrapper.unmount()
+    })
+
+    it('shows the stored choice', () => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      useSettingsStore().setStreamQuality('main')
+      const wrapper = mountView()
+      expect((radio(wrapper, 'Always main').element as HTMLInputElement).checked).toBe(true)
+      expect((radio(wrapper, 'Auto').element as HTMLInputElement).checked).toBe(false)
+      wrapper.unmount()
+    })
+  })
 })

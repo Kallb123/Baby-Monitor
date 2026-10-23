@@ -5,6 +5,7 @@ import type { EntityState } from '@shared/api.ts'
 import type { Camera, LayoutMode } from '@shared/config.ts'
 import { useElementSize } from '@/composables/useElementSize'
 import { bestGrid } from '@/lib/layout'
+import type { StreamQualityPreference } from '@/lib/stream-quality'
 import CameraTile from './CameraTile.vue'
 
 const props = defineProps<{
@@ -16,6 +17,7 @@ const props = defineProps<{
   editing: boolean
   showDecibels: boolean
   showStreamDetails: boolean
+  streamQuality: StreamQualityPreference
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +66,7 @@ const gridStyle = computed(() => {
       :editing="editing"
       :show-decibels="showDecibels"
       :show-stream-details="showStreamDetails"
+      :stream-quality="streamQuality"
       @audio="(on) => emit('audio', camera.id, on)"
       @edit="emit('edit', camera.id)"
     />

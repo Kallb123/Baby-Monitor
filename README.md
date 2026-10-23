@@ -12,12 +12,16 @@ monitor.
 - A tile glows and shows a "Crying" badge when Home Assistant reports crying,
   and reads "Stirring" while its sound level is raised. Temperature and
   humidity come from Home Assistant too.
+- Optional low-resolution sub-streams: a camera with a sub-stream address
+  plays it in small tiles (and focus-layout thumbnails) and its main stream in
+  large ones, cutting decode load and bandwidth on older tablets.
 - Add, rename and remove cameras in place: tap **+**, or **Edit** and then a
   camera.
 - A settings page (the gear in the header) can show each meter's level in
   decibels (dBFS), overlay each feed's received resolution, frame rate and video/audio
   codecs, hide individual cameras from this device's
-  monitor without deleting them, and shows the Home Assistant URL and whether
+  monitor without deleting them, choose between automatic, always-main and
+  always-sub-stream playback, and shows the Home Assistant URL and whether
   the server can reach Home Assistant.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
@@ -197,9 +201,18 @@ For each camera you set:
 | ------------------------- | ------------------------------------------- |
 | Camera name               | `Nursery`                                   |
 | Stream address (RTSP)     | `rtsp://user:pass@192.168.1.20:554/stream1` |
+| Sub-stream address (RTSP) | `rtsp://user:pass@192.168.1.20:554/stream2` |
 | Cry detection (HA sensor) | `binary_sensor.nursery_crying`              |
 | Temperature (HA sensor)   | `sensor.nursery_temperature`                |
 | Humidity (HA sensor)      | `sensor.nursery_humidity`                   |
+
+The sub-stream address is optional: a lower-resolution stream from the same
+camera, registered with go2rtc as `<camera id>.sub`. With **Stream quality** set
+to Auto on the settings page (saved per device), a tile plays it while it is
+under about 960 physical pixels wide (CSS width × device pixel ratio) and
+switches to the main stream above 1280, with a 2 second delay so rotating the
+device doesn't cause reconnects. Cameras without a sub-stream address always play
+their main stream. Turn on **Stream details** to see which one a tile is playing.
 
 The camera id, which is also its go2rtc stream name, is derived from the name
 when the camera is added (`Maya's room` → `maya-s-room`) and never changes.
@@ -263,7 +276,7 @@ This is designed for a trusted home network.
 ## Roadmap
 
 - Local, in-browser cry detection fallback from the audio level.
-- Remove go2rtc streams for deleted cameras.
+- Remove go2rtc streams for deleted cameras and cleared sub-streams.
 - Optional app login / PIN.
 
 ## Contributing

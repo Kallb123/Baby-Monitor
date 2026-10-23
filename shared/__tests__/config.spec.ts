@@ -55,4 +55,36 @@ describe('referencedEntityIds', () => {
     })
     expect(referencedEntityIds(config).sort()).toEqual(['binary_sensor.a_cry', 'sensor.temp'])
   })
+
+  describe('subRtspUrl', () => {
+    const parse = (subRtspUrl?: unknown) =>
+      appConfigSchema.safeParse({
+        cameras: [{ id: 'cot', name: 'Cot', rtspUrl: 'rtsp://cam/s', subRtspUrl }],
+      })
+
+    it('is optional and keeps a valid rtsp or rtsps address', () => {
+      expect(parse(undefined).data?.cameras[0]?.subRtspUrl).toBeUndefined()
+      expect(parse(' rtsp://cam/sub ').data?.cameras[0]?.subRtspUrl).toBe('rtsp://cam/sub')
+      expect(parse('rtsps://cam/sub').success).toBe(true)
+    })
+
+    it('rejects other schemes with the same message as the main address', () => {
+      const result = parse('http://cam/sub')
+      expect(result.success).toBe(false)
+      expect(result.error?.issues[0]?.path).toEqual(['cameras', 0, 'subRtspUrl'])
+      expect(result.error?.issues[0]?.message).toBe('Expected an rtsp:// or rtsps:// URL')
+    })
+
+    it('treats a blank value as absent', () => {
+      for (const blank of ['', '   ']) {
+        const result = parse(blank)
+        expect(result.success).toBe(true)
+        expect(result.data?.cameras[0]?.subRtspUrl).toBeUndefined()
+      }
+    })
+
+    it('does not change the config version', () => {
+      expect(defaultConfig().version).toBe(1)
+    })
+  })
 })

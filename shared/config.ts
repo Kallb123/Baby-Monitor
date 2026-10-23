@@ -27,15 +27,26 @@ const entityId = z
 
 const optionalEntityId = entityId.optional()
 
+const rtspUrl = z
+  .string()
+  .trim()
+  .regex(/^rtsps?:\/\/.+/, 'Expected an rtsp:// or rtsps:// URL')
+
+/** An empty or whitespace-only string counts as absent. */
+const blankToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value
+
 export const cameraSchema = z.object({
   /** Stable id, also used as the go2rtc stream name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, 'Use lowercase letters, digits, "-" or "_"'),
   name: z.string().trim().min(1).max(64),
   /** RTSP source, registered with go2rtc. Example: rtsp://user:pass@192.168.1.20:554/stream1 */
-  rtspUrl: z
-    .string()
-    .trim()
-    .regex(/^rtsps?:\/\/.+/, 'Expected an rtsp:// or rtsps:// URL'),
+  rtspUrl,
+  /**
+   * Optional lower-resolution RTSP source, played in small tiles to save
+   * decode load. Blank counts as absent so an emptied form field is accepted.
+   */
+  subRtspUrl: z.preprocess(blankToUndefined, rtspUrl.optional()).optional(),
   /** Home Assistant entities that enrich this camera tile. All optional. */
   entities: z
     .object({

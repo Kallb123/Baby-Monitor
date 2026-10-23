@@ -152,6 +152,7 @@ function openAdd() {
         :editing="monitor.editing"
         :show-decibels="settings.showDecibels"
         :show-stream-details="settings.showStreamDetails"
+        :stream-quality="settings.streamQuality"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

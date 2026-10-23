@@ -1,5 +1,6 @@
 import type { ApiError, EntityStatesResponse, SystemInfoResponse } from '@shared/api.ts'
 import type { AppConfig } from '@shared/config.ts'
+import type { StreamQuality } from '@shared/streams.ts'
 
 export class ApiRequestError extends Error {
   readonly status: number
@@ -58,9 +59,14 @@ export function fetchSystemInfo(): Promise<SystemInfoResponse> {
   return request('/api/system')
 }
 
-/** Sends a WebRTC SDP offer for a camera and returns the SDP answer. */
-export async function negotiateWebRtc(cameraId: string, offerSdp: string): Promise<string> {
-  const response = await fetch(`/api/streams/${encodeURIComponent(cameraId)}/webrtc`, {
+/** Sends a WebRTC SDP offer for a camera's main or sub stream and returns the SDP answer. */
+export async function negotiateWebRtc(
+  cameraId: string,
+  offerSdp: string,
+  quality: StreamQuality,
+): Promise<string> {
+  const query = new URLSearchParams({ quality })
+  const response = await fetch(`/api/streams/${encodeURIComponent(cameraId)}/webrtc?${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/sdp' },
     body: offerSdp,
