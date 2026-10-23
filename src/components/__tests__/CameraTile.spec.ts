@@ -1,8 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, shallowRef } from 'vue'
 
 import type { StreamDetails } from '@/lib/stream-details'
+import { FEED_LOST_AFTER_MS } from '@/lib/feed-alerts'
+import { useFeedAlertsStore } from '@/stores/feed-alerts'
 import CameraTile from '../CameraTile.vue'
 
 const details = shallowRef<StreamDetails>({})
@@ -30,6 +33,7 @@ const camera = {
 
 describe('CameraTile', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     details.value = {}
     streamStatus.value = 'live'
     HTMLMediaElement.prototype.play = vi.fn<HTMLMediaElement['play']>(() => Promise.resolve())
@@ -104,6 +108,32 @@ describe('CameraTile', () => {
 
     await wrapper.setProps({ camera: { ...camera, rtspUrl: 'rtsp://cam/new' } })
     expect(reconnect).toHaveBeenCalledOnce()
+  })
+
+  it('reports its stream status to the feed alerts until it unmounts', async () => {
+    vi.useFakeTimers()
+    try {
+      streamStatus.value = 'error'
+      const alerts = useFeedAlertsStore()
+      const wrapper = mount(CameraTile, { props: { camera, states: {}, audioActive: false } })
+      vi.advanceTimersByTime(FEED_LOST_AFTER_MS)
+      expect(alerts.lostFeeds.map((f) => f.cameraId)).toEqual(['nursery'])
+
+      streamStatus.value = 'live'
+      await flushPromises()
+      expect(alerts.lostFeeds).toEqual([])
+
+      streamStatus.value = 'error'
+      await flushPromises()
+      vi.advanceTimersByTime(FEED_LOST_AFTER_MS)
+      expect(alerts.lostFeeds).toHaveLength(1)
+
+      // A hidden or deleted camera unmounts its tile; that is not a lost feed.
+      wrapper.unmount()
+      expect(alerts.lostFeeds).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('mutes when audio moves to another tile', async () => {

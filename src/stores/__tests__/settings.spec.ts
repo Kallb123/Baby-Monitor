@@ -83,6 +83,8 @@ describe('settings store', () => {
       showDecibels: true,
       showStreamDetails: false,
       hiddenCameraIds: ['nursery'],
+      feedLostAlerts: true,
+      feedLostSound: true,
     })
 
     setActivePinia(createPinia())
@@ -115,5 +117,27 @@ describe('settings store', () => {
     settings.pruneHiddenCameras(['nursery', 'cot'])
     await nextTick()
     expect(settings.hiddenCameraIds).toEqual(['nursery'])
+  })
+
+  it('turns feed-lost alerts and their sound on by default, and remembers changes', async () => {
+    const settings = useSettingsStore()
+    expect(settings.feedLostAlerts).toBe(true)
+    expect(settings.feedLostSound).toBe(true)
+
+    settings.setFeedLostAlerts(false)
+    settings.setFeedLostSound(false)
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.feedLostAlerts).toBe(false)
+    expect(reloaded.feedLostSound).toBe(false)
+  })
+
+  it('keeps feed-lost alerts on in older saves that predate them', () => {
+    localStorage.setItem('baby-monitor:settings', '{"showDecibels":true}')
+    const settings = useSettingsStore()
+    expect(settings.feedLostAlerts).toBe(true)
+    expect(settings.feedLostSound).toBe(true)
   })
 })

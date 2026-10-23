@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import CameraDialog from '@/components/CameraDialog.vue'
 import CameraGrid from '@/components/CameraGrid.vue'
+import FeedAlertBanner from '@/components/FeedAlertBanner.vue'
 import MonitorHeader from '@/components/MonitorHeader.vue'
 import { useEntityStates } from '@/composables/useEntityStates'
 import { audioUnlocked } from '@/lib/audio-context'
@@ -119,6 +120,8 @@ function openAdd() {
       @toggle-edit="toggleEdit"
       @add="openAdd"
     />
+
+    <FeedAlertBanner />
 
     <main class="content">
       <div v-if="configStore.error && !configStore.loaded" class="card" role="alert">

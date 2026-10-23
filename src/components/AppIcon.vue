@@ -64,6 +64,11 @@ const icons = {
     circle('12', '12', '3'),
   ],
   'arrow-left': [path('m12 19-7-7 7-7'), path('M19 12H5')],
+  'triangle-alert': [
+    path('m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'),
+    path('M12 9v4'),
+    path('M12 17h.01'),
+  ],
 } satisfies Record<string, IconElement[]>
 
 export type IconName = keyof typeof icons

@@ -4,6 +4,7 @@ import { computed, toRef, useTemplateRef, watch } from 'vue'
 import type { EntityState } from '@shared/api.ts'
 import type { Camera } from '@shared/config.ts'
 import { useAudioLevel } from '@/composables/useAudioLevel'
+import { useFeedAlertReporting } from '@/composables/useFeedAlertReporting'
 import { useStirring } from '@/composables/useStirring'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
 import { decibelReadout } from '@/lib/audio-level'
@@ -48,6 +49,7 @@ const { stream, status, details, reconnect } = useWebRtcStream(
   toRef(() => props.camera.id),
   toRef(() => props.showStreamDetails),
 )
+useFeedAlertReporting(() => props.camera.id, status)
 // Editing a camera's source keeps its id (the go2rtc stream name), so pick up
 // the new source explicitly; the tile stays mounted across config saves.
 watch(
