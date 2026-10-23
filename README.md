@@ -42,6 +42,9 @@ monitor.
   Sound levels are recorded in this device's browser while the monitor is
   open, so a device that was closed or asleep shows blank stretches, and each
   device only sees its own.
+- A full-screen button in the header hides the browser's own bars where the
+  browser allows it. It isn't shown on iPhone Safari, which has no full-screen
+  API; Add to Home Screen gives the same effect there.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.
