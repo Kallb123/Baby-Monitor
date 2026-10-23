@@ -101,6 +101,20 @@ describe('useStirring', () => {
     expect(stirring.value).toBe(true)
   })
 
+  it('forgets the learned background on reset and learns the new level', async () => {
+    const { db, floorDb, thresholdDb, reset } = setup()
+    await hum(db, -60, 30)
+    expect(floorDb.value).toBeCloseTo(-60, 1)
+
+    reset()
+    expect(floorDb.value).toBeUndefined()
+    expect(thresholdDb.value).toBe(-43)
+
+    // The other stream is 20 dB hotter; the old floor must not linger in the window.
+    await hum(db, -40, 20)
+    expect(floorDb.value).toBeCloseTo(-40, 1)
+  })
+
   it('follows sensitivity changes', async () => {
     const { sensitivity, thresholdDb } = setup()
     expect(thresholdDb.value).toBe(-43)

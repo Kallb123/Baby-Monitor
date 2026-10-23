@@ -67,7 +67,14 @@ export function createNoiseFloor() {
     return cachedFloor
   }
 
-  return { add, floor }
+  /** Forgets everything, e.g. when the stream's gain changes and old samples no longer compare. */
+  function reset() {
+    seconds.fill(NaN)
+    minimums.fill(NaN)
+    dirty = true
+  }
+
+  return { add, floor, reset }
 }
 
 /** Linear-interpolated percentile (0..1) of a non-empty list. */

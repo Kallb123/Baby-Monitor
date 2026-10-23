@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { pickQuality, type PickQualityInput } from '../stream-quality'
+import {
+  nextSubHealth,
+  pickQuality,
+  SUB_FAILURES_BEFORE_MAIN,
+  type PickQualityInput,
+} from '../stream-quality'
 
 const pick = (overrides: Partial<PickQualityInput>) =>
   pickQuality({
@@ -32,5 +37,28 @@ describe('pickQuality', () => {
       expect(pick({ physicalWidth, current: 'sub' })).toBe('sub')
       expect(pick({ physicalWidth, current: 'main' })).toBe('main')
     }
+  })
+})
+
+describe('nextSubHealth', () => {
+  it('falls back only after consecutive failures reach the limit', () => {
+    let failures = 0
+    for (let i = 1; i < SUB_FAILURES_BEFORE_MAIN; i++) {
+      const health = nextSubHealth(failures, 'failed')
+      expect(health.fallBack).toBe(false)
+      failures = health.failures
+    }
+    expect(nextSubHealth(failures, 'failed')).toEqual({
+      failures: SUB_FAILURES_BEFORE_MAIN,
+      fallBack: true,
+    })
+  })
+
+  it('restarts the streak when the sub-stream connects', () => {
+    expect(nextSubHealth(2, 'connected')).toEqual({ failures: 0, fallBack: false })
+  })
+
+  it('falls back at once when the sub-stream carries no audio', () => {
+    expect(nextSubHealth(0, 'no-audio')).toEqual({ failures: 0, fallBack: true })
   })
 })

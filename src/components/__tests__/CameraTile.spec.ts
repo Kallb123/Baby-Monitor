@@ -1,7 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref, shallowRef, type Ref } from 'vue'
+import { computed, nextTick, ref, shallowRef, type Ref } from 'vue'
+
+import type { StreamOutcome } from '@/lib/stream-quality'
 
 import type { StreamDetails } from '@/lib/stream-details'
 import { FEED_LOST_AFTER_MS } from '@/lib/feed-alerts'
@@ -13,10 +15,27 @@ const streamStatus = ref('live')
 const reconnect = vi.fn<() => Promise<void>>(() => Promise.resolve())
 // The tile's most recent quality ref, to read what it asks the stream to play.
 let requestedQuality: Ref<string | undefined>
+let reportToTile: ((outcome: StreamOutcome) => void) | undefined
+const stream = shallowRef<MediaStream>()
+// The quality actually playing; undefined makes the mock follow what was requested.
+const playing = ref<string>()
 vi.mock('@/composables/useWebRtcStream', () => ({
-  useWebRtcStream: (_id: unknown, _details: unknown, quality: Ref<string | undefined>) => {
+  useWebRtcStream: (
+    _id: unknown,
+    _details: unknown,
+    quality: Ref<string | undefined>,
+    options?: { onOutcome?: (outcome: StreamOutcome) => void },
+  ) => {
     requestedQuality = quality
-    return { stream: shallowRef(), status: streamStatus, details, error: ref(), reconnect }
+    reportToTile = options?.onOutcome
+    return {
+      stream,
+      status: streamStatus,
+      details,
+      error: ref(),
+      playing: computed(() => playing.value ?? quality.value),
+      reconnect,
+    }
   },
 }))
 const meterDb = ref<number | undefined>(-30.4)
@@ -41,6 +60,8 @@ describe('CameraTile', () => {
     setActivePinia(createPinia())
     details.value = {}
     streamStatus.value = 'live'
+    stream.value = undefined
+    playing.value = undefined
     meterDb.value = -30.4
     HTMLMediaElement.prototype.play = vi.fn<HTMLMediaElement['play']>(() => Promise.resolve())
   })
@@ -148,6 +169,28 @@ describe('CameraTile', () => {
     expect(wrapper.find('video').element.muted).toBe(true)
   })
 
+  it('reapplies mute state and playback when the stream is replaced', async () => {
+    const wrapper = mount(CameraTile, { props: { camera, states: {}, audioActive: true } })
+    await flushPromises()
+    const video = wrapper.find('video').element
+    vi.mocked(video.play).mockClear()
+
+    // A new MediaStream can come back muted and paused; the tile is still the audible one.
+    video.muted = true
+    stream.value = {} as MediaStream
+    await nextTick()
+    expect(video.srcObject).toBe(stream.value)
+    expect(video.muted).toBe(false)
+    // Not `Once`: tiles mounted by earlier tests share this stream mock and prototype.
+    expect(video.play).toHaveBeenCalled()
+
+    await wrapper.setProps({ audioActive: false })
+    video.muted = false
+    stream.value = {} as MediaStream
+    await nextTick()
+    expect(video.muted).toBe(true)
+  })
+
   it('shows Home Assistant readings and the crying state', () => {
     const lastChanged = '2026-10-17T10:00:00Z'
     const wrapper = mount(CameraTile, {
@@ -244,6 +287,77 @@ describe('CameraTile', () => {
 
   describe('main and sub streams', () => {
     const withSub = { ...camera, subRtspUrl: 'rtsp://cam/sub' }
+
+    it('relearns the background when the playing stream switches between main and sub', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = mount(CameraTile, {
+          props: {
+            camera: withSub,
+            states: {},
+            audioActive: false,
+            showDecibels: true,
+            streamQuality: 'main',
+          },
+        })
+        playing.value = 'main'
+        for (let i = 0; i < 20 * 15; i++) {
+          meterDb.value = -38.4 + (i % 2) * 0.01
+          await nextTick()
+          vi.advanceTimersByTime(66)
+        }
+        expect(wrapper.find('.decibels').text()).toBe('-38 dB · bg -38')
+
+        // The wanted quality changing is not enough: the old stream still plays.
+        await wrapper.setProps({ streamQuality: 'sub' })
+        expect(wrapper.find('.decibels').text()).toContain('bg -38')
+
+        playing.value = 'sub'
+        await nextTick()
+        expect(wrapper.find('.decibels').text()).toBe('-38 dB')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('plays main and says so when the sub-stream cannot be used', async () => {
+      const wrapper = mount(CameraTile, {
+        props: {
+          camera: withSub,
+          states: {},
+          audioActive: false,
+          showStreamDetails: true,
+          streamQuality: 'sub',
+        },
+      })
+      expect(requestedQuality.value).toBe('sub')
+      reportToTile?.({ quality: 'sub', result: 'no-audio' })
+      await nextTick()
+      expect(requestedQuality.value).toBe('main')
+      expect(wrapper.get('.stream-details').text()).toContain('Stream: Main (sub unavailable)')
+
+      // A deliberate preference change gives the sub-stream another chance.
+      await wrapper.setProps({ streamQuality: 'auto' })
+      await wrapper.setProps({ streamQuality: 'sub' })
+      expect(requestedQuality.value).toBe('sub')
+      expect(wrapper.get('.stream-details').text()).toContain('Stream: Sub')
+    })
+
+    it('labels the stream that is playing while a switch is still negotiating', async () => {
+      const wrapper = mount(CameraTile, {
+        props: {
+          camera: withSub,
+          states: {},
+          audioActive: false,
+          showStreamDetails: true,
+          streamQuality: 'main',
+        },
+      })
+      playing.value = 'main'
+      await wrapper.setProps({ streamQuality: 'sub' })
+      expect(requestedQuality.value).toBe('sub')
+      expect(wrapper.get('.stream-details').text()).toContain('Stream: Main')
+    })
 
     it('asks for the main stream when the camera has no sub-stream', () => {
       mount(CameraTile, { props: { camera, states: {}, audioActive: false, streamQuality: 'sub' } })
