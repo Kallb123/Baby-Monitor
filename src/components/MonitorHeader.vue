@@ -3,6 +3,7 @@ import { onScopeDispose, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import type { LayoutMode } from '@shared/config.ts'
+import { useFullscreen } from '@/composables/useFullscreen'
 import AppIcon from './AppIcon.vue'
 
 defineProps<{
@@ -25,6 +26,8 @@ const formatTime = () => new Date().toLocaleTimeString([], { hour: 'numeric', mi
 const clock = ref(formatTime())
 const clockTimer = setInterval(() => (clock.value = formatTime()), 1000)
 onScopeDispose(() => clearInterval(clockTimer))
+
+const { supported: fullscreenSupported, isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
 const layouts = [
   { mode: 'grid', icon: 'grid', label: 'Grid layout' },
@@ -79,23 +82,37 @@ const layouts = [
       <AppIcon name="plus" :size="22" />
     </button>
 
-    <RouterLink to="/history" class="history-btn" aria-label="History" title="History">
-      <AppIcon name="history" :size="22" />
-    </RouterLink>
+    <div class="nav">
+      <button
+        v-if="fullscreenSupported"
+        type="button"
+        class="fullscreen-btn"
+        :aria-label="isFullscreen ? 'Exit full screen' : 'Enter full screen'"
+        :title="isFullscreen ? 'Exit full screen' : 'Enter full screen'"
+        :aria-pressed="isFullscreen"
+        @click="toggleFullscreen"
+      >
+        <AppIcon :name="isFullscreen ? 'minimize' : 'maximize'" :size="22" />
+      </button>
 
-    <RouterLink to="/settings" class="settings-btn" aria-label="Settings" title="Settings">
-      <AppIcon name="settings" :size="22" />
-    </RouterLink>
+      <RouterLink to="/history" class="history-btn" aria-label="History" title="History">
+        <AppIcon name="history" :size="22" />
+      </RouterLink>
+
+      <RouterLink to="/settings" class="settings-btn" aria-label="Settings" title="Settings">
+        <AppIcon name="settings" :size="22" />
+      </RouterLink>
+    </div>
   </header>
 </template>
 
 <style scoped>
 .monitor-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto auto;
   grid-template-areas:
-    'title layouts edit add history settings'
-    'status layouts edit add history settings';
+    'title layouts edit add fullscreen history settings'
+    'status layouts edit add fullscreen history settings';
   align-items: center;
   column-gap: 16px;
   flex: none;
@@ -141,6 +158,7 @@ const layouts = [
 
 .layout-btn,
 .add-btn,
+.fullscreen-btn,
 .history-btn,
 .settings-btn {
   display: grid;
@@ -204,12 +222,23 @@ const layouts = [
   background: var(--color-accent-400);
 }
 
+.fullscreen-btn,
 .history-btn,
 .settings-btn {
   width: 52px;
   height: 52px;
   background: var(--color-surface);
   color: var(--color-text);
+}
+
+/* Transparent on wide screens so the buttons keep their own grid areas; phones
+   turn it into a real flex row (see the media query). */
+.nav {
+  display: contents;
+}
+
+.fullscreen-btn {
+  grid-area: fullscreen;
 }
 
 .history-btn {
@@ -220,6 +249,7 @@ const layouts = [
   grid-area: settings;
 }
 
+.fullscreen-btn:hover,
 .history-btn:hover,
 .settings-btn:hover {
   filter: brightness(1.12);
@@ -231,14 +261,17 @@ button:disabled {
 }
 
 /* Phones in portrait: icon-only Edit, and the status line gets its own row so
-   "… crying" isn't cut off next to the buttons. History and Settings drop into
-   that row too, or six buttons would squeeze the title out. */
-@media (max-width: 560px) {
+   "… crying" isn't cut off next to the buttons. Full screen, History and
+   Settings drop into that row too, right-aligned in one flex group, or seven
+   buttons would squeeze the title out and the status would lose width. The
+   breakpoint sits above the other pages' 560px because the full-screen button
+   needs another 68px in the single-row layout. */
+@media (max-width: 640px) {
   .monitor-header {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
     grid-template-areas:
       'title layouts edit add'
-      'status status history settings';
+      'status status nav nav';
     column-gap: 8px;
     row-gap: 6px;
     padding-left: calc(16px + env(safe-area-inset-left));
@@ -253,9 +286,15 @@ button:disabled {
     align-self: center;
   }
 
+  .nav {
+    grid-area: nav;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .fullscreen-btn,
   .history-btn,
   .settings-btn {
-    justify-self: center;
     width: 40px;
     height: 40px;
     background: transparent;

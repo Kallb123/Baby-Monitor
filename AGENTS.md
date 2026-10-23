@@ -88,6 +88,11 @@ Data flow:
 - **Editing**: cameras are edited in place. The header's **+** and **Edit**
   open `CameraDialog.vue`, which validates with the shared schema and saves
   the whole config through the config store.
+- **Full screen**: the header's full-screen button uses `useFullscreen`
+  (`src/composables/useFullscreen.ts`), which toggles fullscreen on the
+  document element. `toggle` must run synchronously inside the click handler
+  (it needs a user gesture), and the button is hidden where the browser has no
+  Fullscreen API (iPhone Safari).
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
   such as the dB readout (which also shows the learned background, `bg -38`),
   the stream details overlay, Stream quality (Auto, Main or Sub-stream), the
