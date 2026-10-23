@@ -31,6 +31,17 @@ describe('percentile', () => {
 })
 
 describe('createNoiseFloor', () => {
+  it('forgets all samples on reset and learns again from scratch', () => {
+    const tracker = createNoiseFloor()
+    let end = feed(tracker, 1_000_000, NOISE_MIN_SECONDS, () => -50)
+    expect(tracker.floor(end)).toBe(-50)
+
+    tracker.reset()
+    expect(tracker.floor(end)).toBeUndefined()
+    end = feed(tracker, end, NOISE_MIN_SECONDS, () => -30)
+    expect(tracker.floor(end)).toBe(-30)
+  })
+
   it('reports nothing until it has enough seconds of data', () => {
     const tracker = createNoiseFloor()
     let end = feed(tracker, 1_000_000, NOISE_MIN_SECONDS - 1, () => -50)

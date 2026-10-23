@@ -61,14 +61,15 @@ const emit = defineEmits<{
 
 const root = useTemplateRef<HTMLElement>('root')
 const video = useTemplateRef<HTMLVideoElement>('video')
-const { quality } = useStreamQuality(root, {
+const { quality, fellBack, reportOutcome } = useStreamQuality(root, {
   preference: toRef(() => props.streamQuality),
-  hasSub: computed(() => Boolean(props.camera.subRtspUrl)),
+  subRtspUrl: toRef(() => props.camera.subRtspUrl),
 })
-const { stream, status, details, reconnect } = useWebRtcStream(
+const { stream, status, details, playing, reconnect } = useWebRtcStream(
   toRef(() => props.camera.id),
   toRef(() => props.showStreamDetails),
   quality,
+  { onOutcome: reportOutcome },
 )
 useFeedAlertReporting(() => props.camera.id, status)
 // Editing a camera's source keeps its id (the go2rtc stream name), so pick up
@@ -87,7 +88,17 @@ watch(
 )
 const { level, db, status: levelStatus } = useAudioLevel(stream)
 const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
-const { stirring, floorDb } = useStirring(db, () => props.stirringSensitivity)
+const {
+  stirring,
+  floorDb,
+  reset: resetNoiseFloor,
+} = useStirring(db, () => props.stirringSensitivity)
+// Main and sub streams can differ in gain, so what was learned about the room
+// from one doesn't carry over. Keyed to the stream actually playing, which
+// lags `quality` while the new connection negotiates.
+watch(playing, (next, previous) => {
+  if (previous && next !== previous) resetNoiseFloor()
+})
 useSoundHistoryRecording(() => props.camera.id, db, stirring)
 // The learned background lets users calibrate sensitivity; it means nothing
 // while the meter isn't measuring.
@@ -95,7 +106,12 @@ const background = computed(() =>
   levelStatus.value === 'live' ? backgroundReadout(floorDb.value) : undefined,
 )
 
-const qualityLabel = computed(() => (quality.value === 'sub' ? 'Sub' : 'Main'))
+// What is on screen, not what is wanted: the two differ while a switch negotiates.
+const qualityLabel = computed(() => {
+  const shown = playing.value ?? quality.value
+  if (shown === 'sub') return 'Sub'
+  return fellBack.value ? 'Main (sub unavailable)' : 'Main'
+})
 
 const entityState = (id: string | undefined) => (id ? props.states[id] : undefined)
 const crying = computed(() => isCrying(entityState(props.camera.entities.cry)))
@@ -135,8 +151,9 @@ function onTap() {
 }
 
 // Keeps the element in sync when audio moves to another tile or the stream
-// is replaced. Muting needs no user gesture.
-watch([video, () => props.audioActive], ([el, active]) => {
+// is replaced (a quality switch swaps it for a new MediaStream). Muting needs
+// no user gesture.
+watch([video, stream, () => props.audioActive], ([el, , active]) => {
   if (el) applyAudio(el, active)
 })
 </script>

@@ -31,7 +31,16 @@ export function useStirring(
     release = setTimeout(() => (stirring.value = false), STIRRING_HOLD_MS)
   })
 
+  /**
+   * Starts learning the background again. Main and sub streams of one camera
+   * can differ in gain, so levels measured on one say nothing about the other.
+   */
+  function reset() {
+    noise.reset()
+    floorDb.value = undefined
+  }
+
   onScopeDispose(() => clearTimeout(release))
 
-  return { stirring, floorDb, thresholdDb }
+  return { stirring, floorDb, thresholdDb, reset }
 }

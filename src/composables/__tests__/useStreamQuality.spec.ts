@@ -10,7 +10,7 @@ vi.mock('@/composables/useElementSize', () => ({ useElementSize: () => ({ width 
 describe('useStreamQuality', () => {
   let scope: ReturnType<typeof effectScope>
   const preference = ref<StreamQualityPreference>('auto')
-  const hasSub = ref(true)
+  const subRtspUrl = ref<string | undefined>('rtsp://cam/sub')
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -18,7 +18,7 @@ describe('useStreamQuality', () => {
     vi.stubGlobal('devicePixelRatio', 1)
     width.value = 0
     preference.value = 'auto'
-    hasSub.value = true
+    subRtspUrl.value = 'rtsp://cam/sub'
     scope = effectScope()
   })
 
@@ -28,7 +28,8 @@ describe('useStreamQuality', () => {
     vi.useRealTimers()
   })
 
-  const setup = () => scope.run(() => useStreamQuality(ref(document.body), { preference, hasSub }))!
+  const setup = () =>
+    scope.run(() => useStreamQuality(ref(document.body), { preference, subRtspUrl }))!
 
   it('makes no decision until the first real size measurement', async () => {
     const { quality } = setup()
@@ -48,12 +49,12 @@ describe('useStreamQuality', () => {
   })
 
   it('decides at once, without measuring, when the size cannot matter', () => {
-    hasSub.value = false
+    subRtspUrl.value = undefined
     expect(setup().quality.value).toBe('main')
 
     scope.stop()
     scope = effectScope()
-    hasSub.value = true
+    subRtspUrl.value = 'rtsp://cam/sub'
     preference.value = 'sub'
     expect(setup().quality.value).toBe('sub')
   })
@@ -129,9 +130,89 @@ describe('useStreamQuality', () => {
     await vi.advanceTimersByTimeAsync(QUALITY_DEBOUNCE_MS)
     expect(quality.value).toBe('sub')
 
-    hasSub.value = false
+    subRtspUrl.value = undefined
     await nextTick()
     expect(quality.value).toBe('main')
+  })
+
+  describe('falling back from the sub-stream', () => {
+    const failed = { quality: 'sub', result: 'failed' } as const
+
+    async function smallTile() {
+      const tile = setup()
+      width.value = 400
+      await nextTick()
+      expect(tile.quality.value).toBe('sub')
+      return tile
+    }
+
+    it('plays main after three failed sub-stream attempts in a row', async () => {
+      const { quality, fellBack, reportOutcome } = await smallTile()
+      reportOutcome(failed)
+      reportOutcome(failed)
+      expect(quality.value).toBe('sub')
+      reportOutcome(failed)
+      expect(quality.value).toBe('main')
+      expect(fellBack.value).toBe(true)
+    })
+
+    it('does not count failures that a successful connection interrupted', async () => {
+      const { quality, reportOutcome } = await smallTile()
+      reportOutcome(failed)
+      reportOutcome(failed)
+      reportOutcome({ quality: 'sub', result: 'connected' })
+      reportOutcome(failed)
+      reportOutcome(failed)
+      expect(quality.value).toBe('sub')
+    })
+
+    it('ignores outcomes of the main stream', async () => {
+      const { quality, reportOutcome } = await smallTile()
+      for (let i = 0; i < 5; i++) reportOutcome({ quality: 'main', result: 'failed' })
+      expect(quality.value).toBe('sub')
+    })
+
+    it('plays main at once when the sub-stream carries no audio', async () => {
+      const { quality, reportOutcome } = await smallTile()
+      reportOutcome({ quality: 'sub', result: 'no-audio' })
+      expect(quality.value).toBe('main')
+    })
+
+    it('holds the fallback through size changes', async () => {
+      const { quality, reportOutcome } = await smallTile()
+      reportOutcome({ quality: 'sub', result: 'no-audio' })
+      width.value = 1500
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(QUALITY_DEBOUNCE_MS)
+      width.value = 400
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(QUALITY_DEBOUNCE_MS)
+      expect(quality.value).toBe('main')
+    })
+
+    it('tries the sub-stream again after the preference changes', async () => {
+      const { quality, fellBack, reportOutcome } = await smallTile()
+      reportOutcome({ quality: 'sub', result: 'no-audio' })
+      preference.value = 'sub'
+      await nextTick()
+      expect(quality.value).toBe('sub')
+      expect(fellBack.value).toBe(false)
+    })
+
+    it('tries the sub-stream again after its address changes, with a fresh failure count', async () => {
+      const { quality, reportOutcome } = await smallTile()
+      reportOutcome(failed)
+      reportOutcome(failed)
+      reportOutcome(failed)
+      expect(quality.value).toBe('main')
+
+      subRtspUrl.value = 'rtsp://cam/sub2'
+      await nextTick()
+      expect(quality.value).toBe('sub')
+      reportOutcome(failed)
+      reportOutcome(failed)
+      expect(quality.value).toBe('sub')
+    })
   })
 
   it('releases its timer when the scope stops', async () => {

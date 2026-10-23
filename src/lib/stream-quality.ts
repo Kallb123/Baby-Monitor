@@ -36,3 +36,34 @@ export function pickQuality({
   if (physicalWidth > MAIN_ABOVE_PHYSICAL_PX) return 'main'
   return current
 }
+
+/** How a connection attempt for one stream ended. */
+export type StreamResult = 'connected' | 'failed' | 'no-audio'
+
+export interface StreamOutcome {
+  quality: StreamQuality
+  result: StreamResult
+}
+
+/** Failed sub-stream attempts in a row before the tile plays main instead. */
+export const SUB_FAILURES_BEFORE_MAIN = 3
+
+export interface SubHealth {
+  /** Consecutive failed attempts, to carry into the next call. */
+  failures: number
+  /** True when the tile should stop trying the sub-stream and play main. */
+  fallBack: boolean
+}
+
+/**
+ * Folds one sub-stream attempt into the failure streak. A sub-stream that
+ * connects without an audio track falls back at once, without waiting for
+ * failures: the main stream is assumed to carry the audio, and a nursery
+ * monitor without sound is worse than one that decodes a larger picture.
+ */
+export function nextSubHealth(failures: number, result: StreamResult): SubHealth {
+  if (result === 'connected') return { failures: 0, fallBack: false }
+  if (result === 'no-audio') return { failures: 0, fallBack: true }
+  const streak = failures + 1
+  return { failures: streak, fallBack: streak >= SUB_FAILURES_BEFORE_MAIN }
+}
