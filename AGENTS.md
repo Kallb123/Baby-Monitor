@@ -32,6 +32,12 @@ Data flow:
   go2rtc (`server/go2rtc.ts`) under the camera id. The client opens a
   receive-only `RTCPeerConnection` and exchanges SDP through
   `POST /api/streams/:id/webrtc` (`src/composables/useWebRtcStream.ts`).
+  A camera may also have a `subRtspUrl`, registered as `<id>.sub`
+  (`streamName()` in `shared/streams.ts`). The client asks for `?quality=main|sub`;
+  `src/lib/stream-quality.ts` picks it from the tile's physical width with
+  hysteresis (or the per-device Stream quality setting), and
+  `useStreamQuality` debounces changes and makes the first decision before the
+  stream connects. The server falls back to main when there is no sub-stream.
 - **Level meter**: `src/composables/useAudioLevel.ts` taps each stream's audio
   track with one shared `AudioContext` (`src/lib/audio-context.ts`). Analysis
   nodes are never connected to the speakers, except the feed-lost chime
@@ -99,7 +105,7 @@ Data flow:
 | GET    | `/api/ha/states`          | States of entities referenced by the config                         |
 | GET    | `/api/ha/events`          | SSE snapshots of configured entities, with heartbeat events         |
 | GET    | `/api/system`             | HA URL (credentials stripped), live HA check, go2rtc URL            |
-| POST   | `/api/streams/:id/webrtc` | Body: SDP offer (`application/sdp`). Returns SDP answer             |
+| POST   | `/api/streams/:id/webrtc` | Body: SDP offer. `?quality=main\|sub` (default main). SDP answer    |
 
 ## Commands
 

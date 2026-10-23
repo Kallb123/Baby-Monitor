@@ -158,6 +158,7 @@ function openAdd() {
         :show-decibels="settings.showDecibels"
         :show-stream-details="settings.showStreamDetails"
         :stirring-sensitivity="settings.stirringSensitivity"
+        :stream-quality="settings.streamQuality"
         @audio="onAudio"
         @edit="(cameraId) => (dialog = { cameraId })"
       />

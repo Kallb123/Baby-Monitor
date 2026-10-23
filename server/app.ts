@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 
 import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { ZodError } from 'zod'
+import { z, ZodError } from 'zod'
 
 import type {
   ApiError,
@@ -11,10 +11,13 @@ import type {
   SystemInfoResponse,
 } from '../shared/api.ts'
 import { referencedEntityIds } from '../shared/config.ts'
+import { streamName, streamQualities } from '../shared/streams.ts'
 import type { ConfigStore } from './config-store.ts'
 import { EntityStateStream } from './entity-state-stream.ts'
 import type { Go2rtcClient } from './go2rtc.ts'
 import type { HomeAssistantClient } from './home-assistant.ts'
+
+const webRtcQuerySchema = z.object({ quality: z.enum(streamQualities).default('main') })
 
 export interface AppDeps {
   store: ConfigStore
@@ -154,8 +157,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post<{ Params: { id: string }; Body: string }>(
     '/api/streams/:id/webrtc',
     async (request, reply) => {
+      const query = webRtcQuerySchema.safeParse(request.query)
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ error: 'Expected quality to be "main" or "sub"' } satisfies ApiError)
+      }
       const config = await deps.store.load()
-      if (!config.cameras.some((camera) => camera.id === request.params.id)) {
+      const camera = config.cameras.find((c) => c.id === request.params.id)
+      if (!camera) {
         return reply.status(404).send({ error: 'Unknown camera' } satisfies ApiError)
       }
       if (typeof request.body !== 'string' || request.body.length === 0) {
@@ -163,7 +173,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           .status(400)
           .send({ error: 'Expected an application/sdp body' } satisfies ApiError)
       }
-      const answer = await deps.go2rtc.negotiate(request.params.id, request.body)
+      // A camera without a sub-stream address has no sub stream registered.
+      const quality = query.data.quality === 'sub' && camera.subRtspUrl ? 'sub' : 'main'
+      const answer = await deps.go2rtc.negotiate(streamName(camera.id, quality), request.body)
       return reply.type('application/sdp').send(answer)
     },
   )

@@ -347,4 +347,75 @@ describe('server app', () => {
     })
     expect(res.body).not.toContain('hunter2')
   })
+
+  describe('stream quality', () => {
+    const withSub = { ...camera, subRtspUrl: 'rtsp://192.168.1.20:554/stream2' }
+
+    const offer = (id: string, query = '') =>
+      app.inject({
+        method: 'POST',
+        url: `/api/streams/${id}/webrtc${query}`,
+        headers: { 'content-type': 'application/sdp' },
+        payload: 'v=0 offer',
+      })
+
+    const negotiatedSource = () =>
+      new URL(String(go2rtcFetch.mock.calls.at(-1)![0])).searchParams.get('src')
+
+    beforeEach(async () => {
+      await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [withSub] } })
+      // Setup, not an assertion: wait for the background stream sync to finish.
+      await vi.waitFor(() => {
+        if (go2rtcFetch.mock.calls.length < 2) throw new Error('streams not registered yet')
+      })
+      go2rtcFetch.mockClear()
+    })
+
+    it('negotiates the main stream by default and when asked', async () => {
+      expect((await offer('nursery')).statusCode).toBe(200)
+      expect(negotiatedSource()).toBe('nursery')
+      expect((await offer('nursery', '?quality=main')).statusCode).toBe(200)
+      expect(negotiatedSource()).toBe('nursery')
+    })
+
+    it('negotiates the sub stream when the camera has one', async () => {
+      expect((await offer('nursery', '?quality=sub')).statusCode).toBe(200)
+      expect(negotiatedSource()).toBe('nursery.sub')
+    })
+
+    it('falls back to main for a camera without a sub-stream', async () => {
+      await app.inject({ method: 'PUT', url: '/api/config', payload: { cameras: [camera] } })
+      await vi.waitFor(() => expect(go2rtcFetch).toHaveBeenCalled())
+      go2rtcFetch.mockClear()
+
+      expect((await offer('nursery', '?quality=sub')).statusCode).toBe(200)
+      expect(negotiatedSource()).toBe('nursery')
+    })
+
+    it('rejects an invalid quality without calling go2rtc', async () => {
+      const res = await offer('nursery', '?quality=huge')
+      expect(res.statusCode).toBe(400)
+      expect(res.json()).toEqual({ error: 'Expected quality to be "main" or "sub"' })
+      expect(go2rtcFetch).not.toHaveBeenCalled()
+    })
+
+    it('still answers 404 for an unknown camera', async () => {
+      expect((await offer('garage', '?quality=sub')).statusCode).toBe(404)
+    })
+
+    it('saves a blank sub-stream address as absent and does not register it', async () => {
+      await app.inject({
+        method: 'PUT',
+        url: '/api/config',
+        payload: { cameras: [{ ...withSub, subRtspUrl: '' }] },
+      })
+      await vi.waitFor(() => expect(go2rtcFetch).toHaveBeenCalledTimes(1))
+      const names = go2rtcFetch.mock.calls.map(([url]) =>
+        new URL(String(url)).searchParams.get('name'),
+      )
+      expect(names).toEqual(['nursery'])
+      const saved = await app.inject({ method: 'GET', url: '/api/config' })
+      expect(saved.json().cameras[0]).not.toHaveProperty('subRtspUrl')
+    })
+  })
 })

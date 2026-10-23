@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref, shallowRef } from 'vue'
+import { nextTick, ref, shallowRef, type Ref } from 'vue'
 
 import type { StreamDetails } from '@/lib/stream-details'
 import { FEED_LOST_AFTER_MS } from '@/lib/feed-alerts'
@@ -11,14 +11,13 @@ import CameraTile from '../CameraTile.vue'
 const details = shallowRef<StreamDetails>({})
 const streamStatus = ref('live')
 const reconnect = vi.fn<() => Promise<void>>(() => Promise.resolve())
+// The tile's most recent quality ref, to read what it asks the stream to play.
+let requestedQuality: Ref<string | undefined>
 vi.mock('@/composables/useWebRtcStream', () => ({
-  useWebRtcStream: () => ({
-    stream: shallowRef(),
-    status: streamStatus,
-    details,
-    error: ref(),
-    reconnect,
-  }),
+  useWebRtcStream: (_id: unknown, _details: unknown, quality: Ref<string | undefined>) => {
+    requestedQuality = quality
+    return { stream: shallowRef(), status: streamStatus, details, error: ref(), reconnect }
+  },
 }))
 const meterDb = ref<number | undefined>(-30.4)
 vi.mock('@/composables/useAudioLevel', () => ({
@@ -236,5 +235,73 @@ describe('CameraTile', () => {
     await flushPromises()
     expect(wrapper.find('.stream-details').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  describe('main and sub streams', () => {
+    const withSub = { ...camera, subRtspUrl: 'rtsp://cam/sub' }
+
+    it('asks for the main stream when the camera has no sub-stream', () => {
+      mount(CameraTile, { props: { camera, states: {}, audioActive: false, streamQuality: 'sub' } })
+      expect(requestedQuality.value).toBe('main')
+    })
+
+    it('asks for the stream the preference names when the camera has a sub-stream', () => {
+      mount(CameraTile, {
+        props: { camera: withSub, states: {}, audioActive: false, streamQuality: 'sub' },
+      })
+      expect(requestedQuality.value).toBe('sub')
+      mount(CameraTile, {
+        props: { camera: withSub, states: {}, audioActive: false, streamQuality: 'main' },
+      })
+      expect(requestedQuality.value).toBe('main')
+    })
+
+    it('shows which stream is playing in the stream details', async () => {
+      const wrapper = mount(CameraTile, {
+        props: {
+          camera: withSub,
+          states: {},
+          audioActive: false,
+          showStreamDetails: true,
+          streamQuality: 'sub',
+        },
+      })
+      expect(wrapper.get('.stream-details').text()).toContain('Stream: Sub')
+      await wrapper.setProps({ streamQuality: 'main' })
+      expect(wrapper.get('.stream-details').text()).toContain('Stream: Main')
+      await wrapper.setProps({ compact: true })
+      expect(wrapper.get('.stream-details').text()).toContain('Main · —')
+    })
+
+    it('reconnects when the sub-stream address changes while playing it', async () => {
+      reconnect.mockClear()
+      const wrapper = mount(CameraTile, {
+        props: { camera: withSub, states: {}, audioActive: false, streamQuality: 'sub' },
+      })
+      await wrapper.setProps({ camera: { ...withSub, subRtspUrl: 'rtsp://cam/sub2' } })
+      expect(reconnect).toHaveBeenCalledOnce()
+    })
+
+    it('does not reconnect for a sub-stream address change while playing main', async () => {
+      reconnect.mockClear()
+      const wrapper = mount(CameraTile, {
+        props: { camera: withSub, states: {}, audioActive: false, streamQuality: 'main' },
+      })
+      await wrapper.setProps({ camera: { ...withSub, subRtspUrl: 'rtsp://cam/sub2' } })
+      expect(reconnect).not.toHaveBeenCalled()
+    })
+
+    it('leaves reconnecting to the quality change when a sub-stream is added or removed', async () => {
+      reconnect.mockClear()
+      const wrapper = mount(CameraTile, {
+        props: { camera, states: {}, audioActive: false, streamQuality: 'sub' },
+      })
+      expect(requestedQuality.value).toBe('main')
+      await wrapper.setProps({ camera: withSub })
+      expect(requestedQuality.value).toBe('sub')
+      await wrapper.setProps({ camera })
+      expect(requestedQuality.value).toBe('main')
+      expect(reconnect).not.toHaveBeenCalled()
+    })
   })
 })

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 
 import { negotiateWebRtc } from '@/api'
+import type { StreamQuality } from '@shared/streams.ts'
 import { useWebRtcStream } from '../useWebRtcStream'
 
 vi.mock('@/api', () => ({ negotiateWebRtc: vi.fn<typeof negotiateWebRtc>() }))
@@ -142,5 +143,64 @@ describe('WebRTC stream details lifecycle', () => {
     await flushPromises()
     expect(stream.status.value).toBe('live')
     expect(stream.details.value).toEqual({})
+  })
+
+  describe('stream quality', () => {
+    it('negotiates the requested quality', async () => {
+      const quality = ref<StreamQuality | undefined>('sub')
+      scope.run(() => useWebRtcStream(ref('nursery'), ref(false), quality))
+      await flushPromises()
+      expect(negotiateWebRtc).toHaveBeenCalledExactlyOnceWith('nursery', 'offer', 'sub')
+    })
+
+    it('asks for main when no quality is given', async () => {
+      scope.run(() => useWebRtcStream(ref('nursery')))
+      await flushPromises()
+      expect(negotiateWebRtc).toHaveBeenCalledExactlyOnceWith('nursery', 'offer', 'main')
+    })
+
+    it('waits for the first quality decision instead of connecting to main', async () => {
+      const quality = ref<StreamQuality | undefined>()
+      const stream = scope.run(() => useWebRtcStream(ref('nursery'), ref(false), quality))!
+      await flushPromises()
+      expect(Peer.instances).toHaveLength(0)
+      expect(stream.status.value).toBe('connecting')
+
+      quality.value = 'sub'
+      await flushPromises()
+      expect(Peer.instances).toHaveLength(1)
+      expect(negotiateWebRtc).toHaveBeenCalledExactlyOnceWith('nursery', 'offer', 'sub')
+    })
+
+    it('reconnects with a fresh attempt counter when the quality changes', async () => {
+      const quality = ref<StreamQuality | undefined>('main')
+      const stream = scope.run(() => useWebRtcStream(ref('nursery'), ref(false), quality))!
+      await flushPromises()
+      const first = Peer.instances[0]!
+      // Fail once so the backoff counter is above zero.
+      first.state('failed')
+      expect(stream.status.value).toBe('error')
+
+      quality.value = 'sub'
+      await flushPromises()
+      expect(first.close).toHaveBeenCalled()
+      expect(Peer.instances).toHaveLength(2)
+      expect(vi.mocked(negotiateWebRtc).mock.lastCall?.[2]).toBe('sub')
+
+      // A failure now retries after the base 1 s delay, not the doubled one.
+      Peer.instances[1]!.state('failed')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(Peer.instances).toHaveLength(3)
+      expect(vi.mocked(negotiateWebRtc).mock.lastCall?.[2]).toBe('sub')
+    })
+
+    it('does not reconnect when the quality is set to what it already is', async () => {
+      const quality = ref<StreamQuality | undefined>('main')
+      scope.run(() => useWebRtcStream(ref('nursery'), ref(false), quality))
+      await flushPromises()
+      quality.value = 'main'
+      await flushPromises()
+      expect(Peer.instances).toHaveLength(1)
+    })
   })
 })

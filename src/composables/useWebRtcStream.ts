@@ -2,6 +2,7 @@ import { onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue'
 
 import { negotiateWebRtc } from '@/api'
 import { readStreamDetails, type StreamDetails } from '@/lib/stream-details'
+import type { StreamQuality } from '@shared/streams.ts'
 
 export type StreamStatus = 'connecting' | 'live' | 'error'
 
@@ -31,9 +32,15 @@ function iceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
 
 /**
  * Receives one camera's audio + video from go2rtc over WebRTC, reconnecting
- * with exponential backoff when the connection drops.
+ * with exponential backoff when the connection drops. Changing the camera or
+ * the quality reconnects at once; an undefined quality means "not decided
+ * yet", and nothing connects until it is.
  */
-export function useWebRtcStream(cameraId: Ref<string>, showDetails: Ref<boolean> = ref(false)) {
+export function useWebRtcStream(
+  cameraId: Ref<string>,
+  showDetails: Ref<boolean> = ref(false),
+  quality: Ref<StreamQuality | undefined> = ref('main'),
+) {
   const stream = shallowRef<MediaStream>()
   const status = ref<StreamStatus>('connecting')
   const error = ref<string>()
@@ -94,6 +101,8 @@ export function useWebRtcStream(cameraId: Ref<string>, showDetails: Ref<boolean>
     teardown()
     const gen = ++generation
     status.value = 'connecting'
+    const requested = quality.value
+    if (!requested) return
 
     const peer = new RTCPeerConnection()
     pc = peer
@@ -135,7 +144,7 @@ export function useWebRtcStream(cameraId: Ref<string>, showDetails: Ref<boolean>
       await iceGatheringComplete(peer)
       const offer = peer.localDescription?.sdp
       if (!offer) throw new Error('No local SDP offer')
-      const answer = await negotiateWebRtc(cameraId.value, offer)
+      const answer = await negotiateWebRtc(cameraId.value, offer, requested)
       if (gen !== generation) return
       await peer.setRemoteDescription({ type: 'answer', sdp: answer })
     } catch (e) {
@@ -160,7 +169,7 @@ export function useWebRtcStream(cameraId: Ref<string>, showDetails: Ref<boolean>
   })
 
   watch(
-    cameraId,
+    [cameraId, quality],
     () => {
       attempt = 0
       stream.value = undefined

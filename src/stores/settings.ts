@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { readStored, writeStored } from '@/lib/local-storage'
 import { DEFAULT_SENSITIVITY, SENSITIVITIES, type Sensitivity } from '@/lib/sound-status'
+import { streamQualityPreferences, type StreamQualityPreference } from '@/lib/stream-quality'
 
 const SETTINGS_STORAGE_KEY = 'baby-monitor:settings'
 
@@ -15,6 +16,7 @@ const storedSettingsSchema = z.object({
   stirringSensitivity: z.record(z.string(), z.enum(SENSITIVITIES)).optional(),
   feedLostAlerts: z.boolean().optional(),
   feedLostSound: z.boolean().optional(),
+  streamQuality: z.enum(streamQualityPreferences).optional(),
 })
 
 /**
@@ -43,6 +45,9 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   const stirringSensitivity = ref<Record<string, Sensitivity>>({ ...stored.stirringSensitivity })
 
+  /** Which stream cameras with a sub-stream play: chosen by tile size, or always one. */
+  const streamQuality = ref<StreamQualityPreference>(stored.streamQuality ?? 'auto')
+
   // One write for every field: saving a single one would drop the others.
   watch(
     [
@@ -52,8 +57,9 @@ export const useSettingsStore = defineStore('settings', () => {
       stirringSensitivity,
       feedLostAlerts,
       feedLostSound,
+      streamQuality,
     ],
-    ([decibels, details, hidden, sensitivity, lostAlerts, lostSound]) =>
+    ([decibels, details, hidden, sensitivity, lostAlerts, lostSound, quality]) =>
       writeStored(SETTINGS_STORAGE_KEY, {
         showDecibels: decibels,
         showStreamDetails: details,
@@ -61,6 +67,7 @@ export const useSettingsStore = defineStore('settings', () => {
         stirringSensitivity: sensitivity,
         feedLostAlerts: lostAlerts,
         feedLostSound: lostSound,
+        streamQuality: quality,
       }),
   )
 
@@ -78,6 +85,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function setFeedLostSound(on: boolean) {
     feedLostSound.value = on
+  }
+
+  function setStreamQuality(preference: StreamQualityPreference) {
+    streamQuality.value = preference
   }
 
   function isCameraHidden(cameraId: string) {
@@ -128,6 +139,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setShowStreamDetails,
     setFeedLostAlerts,
     setFeedLostSound,
+    streamQuality,
+    setStreamQuality,
     isCameraHidden,
     setCameraHidden,
     pruneHiddenCameras,

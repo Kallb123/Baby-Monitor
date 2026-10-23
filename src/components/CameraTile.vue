@@ -6,6 +6,7 @@ import type { Camera } from '@shared/config.ts'
 import { useAudioLevel } from '@/composables/useAudioLevel'
 import { useFeedAlertReporting } from '@/composables/useFeedAlertReporting'
 import { useStirring } from '@/composables/useStirring'
+import { useStreamQuality } from '@/composables/useStreamQuality'
 import { useWebRtcStream } from '@/composables/useWebRtcStream'
 import { decibelReadout } from '@/lib/audio-level'
 import { formatMeasurement, isCrying } from '@/lib/entities'
@@ -16,6 +17,7 @@ import {
   soundStatusLabels,
   type Sensitivity,
 } from '@/lib/sound-status'
+import type { StreamQualityPreference } from '@/lib/stream-quality'
 import AppIcon from './AppIcon.vue'
 import LevelMeter from './LevelMeter.vue'
 
@@ -37,6 +39,8 @@ const props = withDefaults(
     showStreamDetails?: boolean
     /** How easily the tile reads "Stirring" against its room's background noise. */
     stirringSensitivity?: Sensitivity
+    /** Which stream to play when the camera has a sub-stream. */
+    streamQuality?: StreamQualityPreference
   }>(),
   {
     compact: false,
@@ -45,6 +49,7 @@ const props = withDefaults(
     showDecibels: false,
     showStreamDetails: false,
     stirringSensitivity: DEFAULT_SENSITIVITY,
+    streamQuality: 'auto',
   },
 )
 
@@ -53,10 +58,16 @@ const emit = defineEmits<{
   edit: []
 }>()
 
+const root = useTemplateRef<HTMLElement>('root')
 const video = useTemplateRef<HTMLVideoElement>('video')
+const { quality } = useStreamQuality(root, {
+  preference: toRef(() => props.streamQuality),
+  hasSub: computed(() => Boolean(props.camera.subRtspUrl)),
+})
 const { stream, status, details, reconnect } = useWebRtcStream(
   toRef(() => props.camera.id),
   toRef(() => props.showStreamDetails),
+  quality,
 )
 useFeedAlertReporting(() => props.camera.id, status)
 // Editing a camera's source keeps its id (the go2rtc stream name), so pick up
@@ -64,6 +75,14 @@ useFeedAlertReporting(() => props.camera.id, status)
 watch(
   () => props.camera.rtspUrl,
   () => void reconnect(),
+)
+// Only a changed address needs this: adding or clearing one flips `quality`,
+// which reconnects by itself.
+watch(
+  () => props.camera.subRtspUrl,
+  (next, previous) => {
+    if (next && previous && quality.value === 'sub') void reconnect()
+  },
 )
 const { level, db, status: levelStatus } = useAudioLevel(stream)
 const decibels = computed(() => decibelReadout(levelStatus.value, db.value))
@@ -73,6 +92,8 @@ const { stirring, floorDb } = useStirring(db, () => props.stirringSensitivity)
 const background = computed(() =>
   levelStatus.value === 'live' ? backgroundReadout(floorDb.value) : undefined,
 )
+
+const qualityLabel = computed(() => (quality.value === 'sub' ? 'Sub' : 'Main'))
 
 const entityState = (id: string | undefined) => (id ? props.states[id] : undefined)
 const crying = computed(() => isCrying(entityState(props.camera.entities.cry)))
@@ -120,6 +141,7 @@ watch([video, () => props.audioActive], ([el, active]) => {
 
 <template>
   <div
+    ref="root"
     class="camera-tile"
     :class="{
       compact,
@@ -172,8 +194,9 @@ watch([video, () => props.audioActive], ([el, active]) => {
 
         <div v-if="showStreamDetails && status === 'live'" class="stream-details">
           <template v-if="compact">
-            <span title="Resolution · video codec">
-              {{ details.resolution?.replaceAll(' ', '') ?? '—' }} · {{ details.videoCodec ?? '—' }}
+            <span title="Stream · resolution · video codec">
+              {{ qualityLabel }} · {{ details.resolution?.replaceAll(' ', '') ?? '—' }} ·
+              {{ details.videoCodec ?? '—' }}
             </span>
             <span title="Audio codec · frame rate">
               {{ details.audioCodec ?? '—' }} ·
@@ -181,6 +204,7 @@ watch([video, () => props.audioActive], ([el, active]) => {
             </span>
           </template>
           <template v-else>
+            <span>Stream: {{ qualityLabel }}</span>
             <span>
               Video: {{ details.resolution ?? '—' }} ·
               {{ details.framesPerSecond === undefined ? '—' : `${details.framesPerSecond} fps` }} ·
