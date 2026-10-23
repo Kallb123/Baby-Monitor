@@ -59,7 +59,9 @@ Check every item that the diff touches. Each failure is a finding.
 **Media and audio**
 
 - At most one camera is audible. Level meters analyse the `MediaStream` and
-  never connect to `AudioContext.destination`.
+  never connect to `AudioContext.destination`. The one exception is the
+  feed-lost chime in `src/lib/alert-sound.ts`, whose nodes must disconnect
+  when it is done.
 - Every `RTCPeerConnection`, `AudioNode`, timer, observer and animation frame
   is released on unmount or camera change. This app runs for days on a wall
   tablet; leaks are bugs.

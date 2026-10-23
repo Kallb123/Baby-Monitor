@@ -61,7 +61,10 @@ Data flow:
   again. `useFeedAlertSound` chimes and vibrates when a feed is lost, then every
   60 s until all are dismissed or restored. The store's 1 s ticker runs only
   while a camera is down. The `feedLostAlerts` and `feedLostSound` settings are
-  per device.
+  per device. Alerts, the chime and sound-history recording only run while the
+  monitor view is open: opening `/settings` or `/history` unmounts the tiles,
+  which closes their streams, so a device left on another page gets no alerts
+  and the 30 s clock restarts when it returns to the monitor.
 - **Home Assistant**: the server holds `HA_TOKEN` and exposes
   `GET /api/ha/states`, which returns only the entities referenced in the saved
   config (`server/home-assistant.ts`). A shared HA WebSocket `subscribe_entities`
@@ -82,11 +85,12 @@ Data flow:
   the whole config through the config store.
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
   such as the dB readout (which also shows the learned background, `bg -38`),
-  which cameras to hide and each camera's stirring sensitivity, kept in
-  `localStorage` by
-  `useSettingsStore` (not on the server, for the same reason as the layout),
-  plus read-only server settings and a live Home Assistant check from
-  `GET /api/system`.
+  the stream details overlay, Stream quality (Auto, Main or Sub-stream), the
+  Alerts toggles (feed-lost banner, chime and vibration), which cameras to hide
+  and each camera's Stirring sensitivity (Low, Medium or High), kept in
+  `localStorage` by `useSettingsStore` (not on the server, for the same reason
+  as the layout), plus read-only server settings and a live Home Assistant
+  check from `GET /api/system`.
 - **History** (`/history`, `HistoryView.vue`, opened from the header's clock
   icon): crying comes from HA's recorder through `GET /api/ha/history`
   (`HomeAssistantClient.getHistory`, converted by `server/cry-history.ts`), so
@@ -103,8 +107,9 @@ Data flow:
   tile, no WebRTC connection and no audio tap. Hiding the audio camera stops
   its audio; a hidden focus camera falls back to the first visible one without
   overwriting the saved choice. If all are hidden the monitor points to
-  Settings. Ids of deleted cameras are pruned (hidden list and stirring sensitivities)
-  once the config has loaded.
+  Settings. Ids of deleted cameras are pruned once the config has loaded: from
+  the hidden list and stirring sensitivities (`useSettingsStore`) and from the
+  recorded sound history (`soundHistory.pruneDeletedCameras`).
 
 ### API
 

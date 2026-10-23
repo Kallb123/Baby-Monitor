@@ -17,7 +17,10 @@ const decibelsLabelId = useId()
 const streamDetailsLabelId = useId()
 const feedAlertsLabelId = useId()
 const feedSoundLabelId = useId()
+// One prefix per section: camera ids are user-chosen, so a shared prefix could
+// make one camera's id in a section equal another camera's id in the other.
 const cameraLabelPrefix = useId()
+const stirringLabelPrefix = useId()
 const streamQualityLabelId = useId()
 const streamQualityName = useId()
 
@@ -188,10 +191,10 @@ const homeAssistant = computed(() => {
         <template v-else>
           <div v-for="camera in configStore.config.cameras" :key="camera.id" class="row">
             <div class="row-text">
-              <span :id="`${cameraLabelPrefix}-${camera.id}`" class="row-label">{{
+              <span :id="`${cameraLabelPrefix}-label-${camera.id}`" class="row-label">{{
                 camera.name
               }}</span>
-              <span :id="`${cameraLabelPrefix}-${camera.id}-help`" class="row-help">
+              <span :id="`${cameraLabelPrefix}-help-${camera.id}`" class="row-help">
                 Show on monitor
               </span>
             </div>
@@ -200,7 +203,7 @@ const homeAssistant = computed(() => {
               class="switch"
               role="switch"
               :aria-checked="!settings.isCameraHidden(camera.id)"
-              :aria-labelledby="`${cameraLabelPrefix}-${camera.id} ${cameraLabelPrefix}-${camera.id}-help`"
+              :aria-labelledby="`${cameraLabelPrefix}-label-${camera.id} ${cameraLabelPrefix}-help-${camera.id}`"
               @click="settings.setCameraHidden(camera.id, !settings.isCameraHidden(camera.id))"
             >
               <span class="switch-knob" />
@@ -226,18 +229,18 @@ const homeAssistant = computed(() => {
           :key="camera.id"
           class="row sensitivity-row"
         >
-          <span :id="`${cameraLabelPrefix}-stirring-${camera.id}`" class="row-label">{{
+          <span :id="`${stirringLabelPrefix}-${camera.id}`" class="row-label">{{
             camera.name
           }}</span>
           <div
             class="segments"
             role="radiogroup"
-            :aria-labelledby="`${cameraLabelPrefix}-stirring-${camera.id}`"
+            :aria-labelledby="`${stirringLabelPrefix}-${camera.id}`"
           >
             <label v-for="option in SENSITIVITIES" :key="option" class="segment">
               <input
                 type="radio"
-                :name="`${cameraLabelPrefix}-stirring-${camera.id}`"
+                :name="`${stirringLabelPrefix}-${camera.id}`"
                 :value="option"
                 :checked="settings.sensitivityFor(camera.id) === option"
                 @change="settings.setSensitivity(camera.id, option)"
@@ -500,7 +503,7 @@ const homeAssistant = computed(() => {
   display: grid;
   place-items: center;
   min-width: 72px;
-  height: 36px;
+  height: 40px;
   padding: 0 12px;
   border-radius: var(--radius-pill);
   font-size: 14px;

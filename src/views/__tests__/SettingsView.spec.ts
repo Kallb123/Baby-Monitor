@@ -149,6 +149,33 @@ describe('SettingsView', () => {
       wrapper.unmount()
     })
 
+    it('keeps element ids and radio names unique when camera ids look like each other', async () => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      vi.mocked(fetchConfig).mockResolvedValue(
+        configWith(
+          camera('cot', 'Cot'),
+          camera('stirring-cot', 'Other cot'),
+          camera('cot-help', 'Help cot'),
+        ),
+      )
+      const wrapper = mountView()
+      await flushPromises()
+
+      const ids = [...wrapper.element.querySelectorAll('[id]')].map((el) => el.id)
+      expect(new Set(ids).size).toBe(ids.length)
+
+      const groups = wrapper.findAll('.sensitivity-row [role="radiogroup"]')
+      expect(groups).toHaveLength(3)
+      const names = groups.map((group) => group.get('input').attributes('name'))
+      expect(new Set(names).size).toBe(3)
+      // Each radio group is named after its own camera.
+      const labels = groups.map((group) =>
+        wrapper.get(`[id="${group.attributes('aria-labelledby')}"]`).text(),
+      )
+      expect(labels).toEqual(['Cot', 'Other cot', 'Help cot'])
+      wrapper.unmount()
+    })
+
     it('shows an empty state without cameras', async () => {
       vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
       const wrapper = mountView()
@@ -202,16 +229,22 @@ describe('SettingsView', () => {
       go2rtc: { url: 'http://localhost:1984' },
     }
 
+    // The per-camera stirring groups are radiogroups too, so find this one by its label.
+    const qualityGroup = (wrapper: ReturnType<typeof mountView>) => {
+      const label = wrapper.findAll('.row-label').find((el) => el.text() === 'Stream quality')!
+      return wrapper.get(`[role="radiogroup"][aria-labelledby="${label.attributes('id')}"]`)
+    }
+
     const radio = (wrapper: ReturnType<typeof mountView>, label: string) =>
-      wrapper
-        .findAll('[role="radiogroup"] label')
+      qualityGroup(wrapper)
+        .findAll('label')
         .find((el) => el.text() === label)!
         .get('input')
 
     it('offers Auto, Main and Sub-stream, with Auto chosen by default', () => {
       vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
       const wrapper = mountView()
-      const group = wrapper.get('[role="radiogroup"]')
+      const group = qualityGroup(wrapper)
       expect(group.findAll('label').map((el) => el.text())).toEqual(['Auto', 'Main', 'Sub-stream'])
       expect((radio(wrapper, 'Auto').element as HTMLInputElement).checked).toBe(true)
       expect(group.text()).toContain('only applies to cameras with a sub-stream address')
@@ -221,13 +254,33 @@ describe('SettingsView', () => {
     it('labels the group and saves the choice on this device', async () => {
       vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
       const wrapper = mountView()
-      const labelId = wrapper.get('[role="radiogroup"]').attributes('aria-labelledby')!
+      const labelId = qualityGroup(wrapper).attributes('aria-labelledby')!
       expect(wrapper.get(`[id="${labelId}"]`).text()).toBe('Stream quality')
 
       await radio(wrapper, 'Sub-stream').setValue(true)
       expect(useSettingsStore().streamQuality).toBe('sub')
       await radio(wrapper, 'Main').setValue(true)
       expect(useSettingsStore().streamQuality).toBe('main')
+      wrapper.unmount()
+    })
+
+    it('still finds its own group when cameras add stirring groups', async () => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      vi.mocked(fetchConfig).mockResolvedValue(
+        configWith(camera('nursery', 'Nursery'), camera('cot', 'Cot')),
+      )
+      const wrapper = mountView()
+      await flushPromises()
+      expect(wrapper.findAll('[role="radiogroup"]')).toHaveLength(3)
+      expect(
+        qualityGroup(wrapper)
+          .findAll('label')
+          .map((el) => el.text()),
+      ).toEqual(['Auto', 'Main', 'Sub-stream'])
+
+      await radio(wrapper, 'Sub-stream').setValue(true)
+      expect(useSettingsStore().streamQuality).toBe('sub')
+      expect(useSettingsStore().sensitivityFor('nursery')).toBe('medium')
       wrapper.unmount()
     })
 
