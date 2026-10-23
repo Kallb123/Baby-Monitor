@@ -38,6 +38,10 @@ Data flow:
   hysteresis (or the per-device Stream quality setting), and
   `useStreamQuality` debounces changes and makes the first decision before the
   stream connects. The server falls back to main when there is no sub-stream.
+  Quality switches are make-before-break: the old connection keeps playing
+  until the new one is `connected`, so an audible tile doesn't drop out. A
+  sub-stream that fails 3 attempts in a row, or connects without audio, falls
+  back to main (`nextSubHealth`) until the sub URL or the preference changes.
 - **Level meter**: `src/composables/useAudioLevel.ts` taps each stream's audio
   track with one shared `AudioContext` (`src/lib/audio-context.ts`). Analysis
   nodes are never connected to the speakers, except the feed-lost chime
@@ -49,7 +53,8 @@ Data flow:
   percentile of per-second minimums over 120 s, unknown for the first ~15 s)
   plus a per-sensitivity margin, never below a per-sensitivity minimum
   (`stirringThresholdDb` in `src/lib/sound-status.ts`). Medium's minimum is the
-  old fixed -43 dBFS.
+  old fixed -43 dBFS. The floor resets when the playing stream switches between
+  main and sub, since their gains differ.
 - **Feed-lost alerts**: every `CameraTile` reports its stream status through
   `useFeedAlertReporting` to the transient `useFeedAlertsStore`
   (`src/stores/feed-alerts.ts`), which records when each camera went down (any
