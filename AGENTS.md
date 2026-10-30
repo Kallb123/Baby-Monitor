@@ -153,6 +153,7 @@ npm run type-check   # vue-tsc --build over app, server, node and vitest tsconfi
 npm run format       # prettier
 npm run check        # format:check + lint + type-check + test  (run before every PR)
 npm run build        # type-check + vite build to dist/
+npm run bump minor   # bump package.json version (patch|minor|major), shown in Settings
 ```
 
 Run `npm run check` before you commit. CI runs the same plus a build.

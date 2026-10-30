@@ -21,7 +21,8 @@
     "lint:fix": "oxlint . --fix && eslint . --cache --fix",
     "format": "prettier --write src/ server/ shared/",
     "format:check": "prettier --check src/ server/ shared/",
-    "check": "run-s format:check lint type-check test"
+    "check": "run-s format:check lint type-check test",
+    "bump": "node scripts/bump.ts"
   },
   "dependencies": {
     "@fastify/static": "^10.1.6",
