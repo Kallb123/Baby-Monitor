@@ -29,6 +29,15 @@ describe('SettingsView', () => {
     vi.mocked(fetchConfig).mockResolvedValue(configWith())
   })
 
+  it('shows the app version in the footer', () => {
+    vi.mocked(fetchSystemInfo).mockResolvedValue({
+      homeAssistant: { status: 'unconfigured', message: 'HA_URL and HA_TOKEN are not set' },
+      go2rtc: { url: 'http://localhost:1984' },
+    })
+    const wrapper = mountView()
+    expect(wrapper.get('footer').text()).toBe(`Baby Monitor v${__APP_VERSION__}`)
+  })
+
   it('toggles the decibel readout', async () => {
     vi.mocked(fetchSystemInfo).mockResolvedValue({
       homeAssistant: { status: 'unconfigured', message: 'HA_URL and HA_TOKEN are not set' },

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
@@ -8,8 +9,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig(({ mode }) => {
   // Read PORT from .env too, so the proxy follows the API server's port.
   const env = loadEnv(mode, process.cwd(), '')
+  const { version } = JSON.parse(
+    readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+  ) as { version: string }
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(version),
+    },
     plugins: [
       vue(),
       VitePWA({
