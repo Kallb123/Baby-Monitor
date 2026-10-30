@@ -264,6 +264,7 @@ Outside Docker, config is saved to `data/config.json` (git-ignored).
 | `npm run lint`       | oxlint + ESLint                                           |
 | `npm run type-check` | `vue-tsc` across client, server and tests                 |
 | `npm run check`      | Everything CI runs: format check, lint, type-check, tests |
+| `npm run bump minor` | Bump the app version (`patch`, `minor` or `major`)        |
 
 ## Configuration
 

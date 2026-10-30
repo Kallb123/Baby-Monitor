@@ -16,6 +16,7 @@ import { useSettingsStore } from '@/stores/settings'
 const settings = useSettingsStore()
 const configStore = useConfigStore()
 const { info, error } = useSystemInfo()
+const appVersion = __APP_VERSION__
 const decibelsLabelId = useId()
 const streamDetailsLabelId = useId()
 const feedAlertsLabelId = useId()
@@ -397,6 +398,8 @@ const homeAssistant = computed(() => {
         </dl>
       </section>
     </main>
+
+    <footer class="settings-footer">Baby Monitor v{{ appVersion }}</footer>
   </div>
 </template>
 
@@ -444,8 +447,15 @@ const homeAssistant = computed(() => {
   gap: 16px;
   max-width: 640px;
   margin: 0 auto;
-  padding: 12px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))
+  padding: 12px calc(20px + env(safe-area-inset-right)) 12px calc(20px + env(safe-area-inset-left));
+}
+
+.settings-footer {
+  padding: 4px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))
     calc(20px + env(safe-area-inset-left));
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-text-muted);
 }
 
 .card {
