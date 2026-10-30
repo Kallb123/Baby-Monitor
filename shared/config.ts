@@ -18,14 +18,14 @@ export const CONFIG_VERSION = 1
  * the server reads these entities with its HA token, so allowing any domain
  * would expose locks, people, device trackers and so on.
  */
-const entityId = z
+export const entityIdSchema = z
   .string()
   .regex(
     /^(sensor|binary_sensor)\.[a-z0-9_]+$/,
     'Expected a sensor or binary_sensor entity id, e.g. sensor.nursery_temp',
   )
 
-const optionalEntityId = entityId.optional()
+const optionalEntityId = entityIdSchema.optional()
 
 const rtspUrl = z
   .string()
@@ -74,6 +74,12 @@ export const appConfigSchema = z
     version: z.literal(CONFIG_VERSION).default(CONFIG_VERSION),
     cameras: z.array(cameraSchema).max(16).default([]),
     layout: layoutSchema.default({ mode: 'grid' }),
+    /**
+     * Battery level sensors that devices may show in their header when the
+     * browser can't read its own battery. Each device picks its own sensor from
+     * these; listing them here is what lets the server read them from HA.
+     */
+    batteryEntities: z.array(entityIdSchema).max(16).default([]),
   })
   .superRefine((config, ctx) => {
     const seen = new Set<string>()
@@ -107,5 +113,6 @@ export function referencedEntityIds(config: AppConfig): string[] {
       if (id) ids.add(id)
     }
   }
+  for (const id of config.batteryEntities) ids.add(id)
   return [...ids]
 }

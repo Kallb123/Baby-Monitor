@@ -4,7 +4,18 @@ import { appConfigSchema, defaultConfig, referencedEntityIds } from '../config.t
 
 describe('appConfigSchema', () => {
   it('fills defaults for an empty object', () => {
-    expect(defaultConfig()).toEqual({ version: 1, cameras: [], layout: { mode: 'grid' } })
+    expect(defaultConfig()).toEqual({
+      version: 1,
+      cameras: [],
+      layout: { mode: 'grid' },
+      batteryEntities: [],
+    })
+  })
+
+  it('only allows sensor entities as battery sensors', () => {
+    const withBattery = (id: string) => appConfigSchema.safeParse({ batteryEntities: [id] }).success
+    expect(withBattery('sensor.tablet_battery_level')).toBe(true)
+    expect(withBattery('lock.front_door')).toBe(false)
   })
 
   it('rejects non-RTSP stream URLs', () => {
@@ -54,6 +65,19 @@ describe('referencedEntityIds', () => {
       ],
     })
     expect(referencedEntityIds(config).sort()).toEqual(['binary_sensor.a_cry', 'sensor.temp'])
+  })
+
+  it('includes battery sensors', () => {
+    const config = appConfigSchema.parse({
+      cameras: [
+        { id: 'a', name: 'A', rtspUrl: 'rtsp://a/s', entities: { temperature: 'sensor.temp' } },
+      ],
+      batteryEntities: ['sensor.tablet_battery_level', 'sensor.temp'],
+    })
+    expect(referencedEntityIds(config).sort()).toEqual([
+      'sensor.tablet_battery_level',
+      'sensor.temp',
+    ])
   })
 
   describe('subRtspUrl', () => {

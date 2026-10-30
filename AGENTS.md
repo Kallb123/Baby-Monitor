@@ -93,6 +93,14 @@ Data flow:
   document element. `toggle` must run synchronously inside the click handler
   (it needs a user gesture), and the button is hidden where the browser has no
   Fullscreen API (iPhone Safari).
+- **Battery**: `MonitorHeader` shows this device's battery next to the clock,
+  by default only in full screen (where Android hides its status bar), per the
+  per-device `batteryDisplay` setting. `useDeviceBattery` reads the Battery
+  Status API (Chromium only, secure context only); when that has no reading,
+  `MonitorView` falls back to the device's HA sensor (`batteryEntityId`, per
+  device). The server only serves entities the config references, so the
+  settings page adds a new sensor to the config's `batteryEntities` list before
+  storing the choice locally. Pure logic is in `src/lib/battery.ts`.
 - **Settings page** (`/settings`, `SettingsView.vue`): per-device app settings
   such as the dB readout (which also shows the learned background, `bg -38`),
   the stream details overlay, Stream quality (Auto, Main or Sub-stream), the

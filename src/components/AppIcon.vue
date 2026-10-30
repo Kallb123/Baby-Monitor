@@ -20,6 +20,8 @@ const speaker = path(
   'M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z',
 )
 
+const batteryCase = [path('M22 14v-4'), rect('2', '6', '16', '12', '2')]
+
 /** Lucide icons (https://lucide.dev), as the design system asks. */
 const icons = {
   grid: [
@@ -85,6 +87,22 @@ const icons = {
     path('M21 8h-3a2 2 0 0 1-2-2V3'),
     path('M3 16h3a2 2 0 0 1 2 2v3'),
     path('M16 21v-3a2 2 0 0 1 2-2h3'),
+  ],
+  'battery-full': [...batteryCase, path('M6 14v-4'), path('M10 14v-4'), path('M14 14v-4')],
+  'battery-medium': [...batteryCase, path('M6 14v-4'), path('M10 14v-4')],
+  'battery-low': [...batteryCase, path('M6 14v-4')],
+  'battery-warning': [
+    path('M10 17h.01'),
+    path('M10 7v6'),
+    path('M14 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2'),
+    path('M22 14v-4'),
+    path('M6 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2'),
+  ],
+  'battery-charging': [
+    path('m11 7-3 5h4l-3 5'),
+    path('M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935'),
+    path('M22 14v-4'),
+    path('M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936'),
   ],
 } satisfies Record<string, IconElement[]>
 

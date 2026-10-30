@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { z } from 'zod'
 
+import { entityIdSchema } from '@shared/config.ts'
+import { batteryDisplays, type BatteryDisplay } from '@/lib/battery'
 import { readStored, writeStored } from '@/lib/local-storage'
 import { DEFAULT_SENSITIVITY, SENSITIVITIES, type Sensitivity } from '@/lib/sound-status'
 import { streamQualityPreferences, type StreamQualityPreference } from '@/lib/stream-quality'
@@ -17,6 +19,8 @@ const storedSettingsSchema = z.object({
   feedLostAlerts: z.boolean().optional(),
   feedLostSound: z.boolean().optional(),
   streamQuality: z.enum(streamQualityPreferences).optional(),
+  batteryDisplay: z.enum(batteryDisplays).optional(),
+  batteryEntityId: entityIdSchema.optional(),
 })
 
 /**
@@ -48,6 +52,15 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Which stream cameras with a sub-stream play: chosen by tile size, or always one. */
   const streamQuality = ref<StreamQualityPreference>(stored.streamQuality ?? 'auto')
 
+  /** When the header shows this device's battery. */
+  const batteryDisplay = ref<BatteryDisplay>(stored.batteryDisplay ?? 'fullscreen')
+  /**
+   * This device's Home Assistant battery sensor, used when the browser can't
+   * read the battery itself. The server only serves it while it is listed in
+   * the config's `batteryEntities`.
+   */
+  const batteryEntityId = ref<string | undefined>(stored.batteryEntityId)
+
   // One write for every field: saving a single one would drop the others.
   watch(
     [
@@ -58,8 +71,20 @@ export const useSettingsStore = defineStore('settings', () => {
       feedLostAlerts,
       feedLostSound,
       streamQuality,
+      batteryDisplay,
+      batteryEntityId,
     ],
-    ([decibels, details, hidden, sensitivity, lostAlerts, lostSound, quality]) =>
+    ([
+      decibels,
+      details,
+      hidden,
+      sensitivity,
+      lostAlerts,
+      lostSound,
+      quality,
+      battery,
+      batteryEntity,
+    ]) =>
       writeStored(SETTINGS_STORAGE_KEY, {
         showDecibels: decibels,
         showStreamDetails: details,
@@ -68,6 +93,8 @@ export const useSettingsStore = defineStore('settings', () => {
         feedLostAlerts: lostAlerts,
         feedLostSound: lostSound,
         streamQuality: quality,
+        batteryDisplay: battery,
+        batteryEntityId: batteryEntity,
       }),
   )
 
@@ -89,6 +116,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function setStreamQuality(preference: StreamQualityPreference) {
     streamQuality.value = preference
+  }
+
+  function setBatteryDisplay(display: BatteryDisplay) {
+    batteryDisplay.value = display
+  }
+
+  function setBatteryEntityId(entityId: string | undefined) {
+    batteryEntityId.value = entityId
   }
 
   function isCameraHidden(cameraId: string) {
@@ -141,6 +176,10 @@ export const useSettingsStore = defineStore('settings', () => {
     setFeedLostSound,
     streamQuality,
     setStreamQuality,
+    batteryDisplay,
+    setBatteryDisplay,
+    batteryEntityId,
+    setBatteryEntityId,
     isCameraHidden,
     setCameraHidden,
     pruneHiddenCameras,

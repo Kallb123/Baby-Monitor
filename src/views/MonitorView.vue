@@ -6,8 +6,10 @@ import CameraDialog from '@/components/CameraDialog.vue'
 import CameraGrid from '@/components/CameraGrid.vue'
 import FeedAlertBanner from '@/components/FeedAlertBanner.vue'
 import MonitorHeader from '@/components/MonitorHeader.vue'
+import { useDeviceBattery } from '@/composables/useDeviceBattery'
 import { useEntityStates } from '@/composables/useEntityStates'
 import { audioUnlocked } from '@/lib/audio-context'
+import { homeAssistantBattery } from '@/lib/battery'
 import { MAX_CAMERAS, visibleCameras } from '@/lib/cameras'
 import { isCrying } from '@/lib/entities'
 import { statusLine } from '@/lib/status-line'
@@ -22,6 +24,15 @@ const monitor = useMonitorStore()
 const settings = useSettingsStore()
 const soundHistory = useSoundHistoryStore()
 const { states, configured: haConfigured, error: statesError } = useEntityStates()
+const { reading: deviceBattery } = useDeviceBattery()
+
+// The browser's own reading wins: the sensor is for browsers that can't read
+// the battery (no HTTPS, Safari, Firefox).
+const battery = computed(() => {
+  if (deviceBattery.value) return deviceBattery.value
+  const entityId = settings.batteryEntityId
+  return entityId ? homeAssistantBattery(states.value[entityId]) : undefined
+})
 
 const CONFIG_RETRY_MS = 5000
 let configRetry: ReturnType<typeof setTimeout> | undefined
@@ -121,6 +132,8 @@ function openAdd() {
       :editing="monitor.editing"
       :can-edit="visible.length > 0"
       :can-add="configStore.loaded && cameras.length < MAX_CAMERAS"
+      :battery="battery"
+      :battery-display="settings.batteryDisplay"
       @layout="monitor.setLayout"
       @toggle-edit="toggleEdit"
       @add="openAdd"

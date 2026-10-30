@@ -18,6 +18,7 @@ const savedConfig: AppConfig = {
     },
   ],
   layout: { mode: 'grid' },
+  batteryEntities: [],
 }
 
 describe('CameraDialog', () => {

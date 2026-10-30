@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { onScopeDispose, ref } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import type { LayoutMode } from '@shared/config.ts'
 import { useFullscreen } from '@/composables/useFullscreen'
+import {
+  batteryIcon,
+  batteryLabel,
+  isBatteryLow,
+  shouldShowBattery,
+  type BatteryDisplay,
+  type BatteryReading,
+} from '@/lib/battery'
 import AppIcon from './AppIcon.vue'
 
-defineProps<{
+const props = defineProps<{
   status: string
   /** Secondary warning, e.g. Home Assistant being unreachable. */
   notice: string | undefined
@@ -14,6 +22,9 @@ defineProps<{
   editing: boolean
   canEdit: boolean
   canAdd: boolean
+  /** This device's battery, if anything can read it. */
+  battery?: BatteryReading
+  batteryDisplay?: BatteryDisplay
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +40,12 @@ onScopeDispose(() => clearInterval(clockTimer))
 
 const { supported: fullscreenSupported, isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
+const shownBattery = computed(() =>
+  props.battery && shouldShowBattery(props.batteryDisplay ?? 'fullscreen', isFullscreen.value)
+    ? props.battery
+    : undefined,
+)
+
 const layouts = [
   { mode: 'grid', icon: 'grid', label: 'Grid layout' },
   { mode: 'focus', icon: 'focus', label: 'Large + thumbnails layout' },
@@ -39,7 +56,20 @@ const layouts = [
   <header class="monitor-header">
     <h1 class="title">Nursery</h1>
     <p class="status">
-      <span>{{ clock }} · {{ status }}</span>
+      <span>{{ clock }} · </span>
+      <template v-if="shownBattery">
+        <span
+          class="battery"
+          :class="{ low: isBatteryLow(shownBattery) }"
+          :title="batteryLabel(shownBattery)"
+        >
+          <AppIcon :name="batteryIcon(shownBattery)" :size="16" />
+          <span class="visually-hidden">{{ batteryLabel(shownBattery) }}</span>
+          <span aria-hidden="true">{{ shownBattery.level }}%</span>
+        </span>
+        <span> · </span>
+      </template>
+      <span>{{ status }}</span>
       <span v-if="notice" class="notice"> · {{ notice }}</span>
     </p>
 
@@ -144,6 +174,28 @@ const layouts = [
 
 .notice {
   color: var(--color-accent-300);
+}
+
+.battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: bottom;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Under 20% and not charging: on a wall tablet that usually means the charger came out. */
+.battery.low {
+  color: var(--color-accent-300);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .layouts {
