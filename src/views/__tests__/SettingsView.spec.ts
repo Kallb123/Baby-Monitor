@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SystemInfoResponse } from '@shared/api.ts'
 import { appConfigSchema, type AppConfig } from '@shared/config.ts'
-import { fetchConfig, fetchSystemInfo } from '@/api'
+import { fetchConfig, fetchSystemInfo, saveConfig } from '@/api'
 import { useConfigStore } from '@/stores/config'
 import { useSettingsStore } from '@/stores/settings'
 import SettingsView from '../SettingsView.vue'
@@ -12,6 +12,7 @@ import SettingsView from '../SettingsView.vue'
 vi.mock('@/api', () => ({
   fetchSystemInfo: vi.fn<() => Promise<SystemInfoResponse>>(),
   fetchConfig: vi.fn<() => Promise<AppConfig>>(),
+  saveConfig: vi.fn<(config: AppConfig) => Promise<AppConfig>>(),
 }))
 
 const camera = (id: string, name: string) => ({ id, name, rtspUrl: 'rtsp://cam/s' })
@@ -271,7 +272,8 @@ describe('SettingsView', () => {
       )
       const wrapper = mountView()
       await flushPromises()
-      expect(wrapper.findAll('[role="radiogroup"]')).toHaveLength(3)
+      // Battery level, stream quality and one stirring group per camera.
+      expect(wrapper.findAll('[role="radiogroup"]')).toHaveLength(4)
       expect(
         qualityGroup(wrapper)
           .findAll('label')
@@ -290,6 +292,118 @@ describe('SettingsView', () => {
       const wrapper = mountView()
       expect((radio(wrapper, 'Main').element as HTMLInputElement).checked).toBe(true)
       expect((radio(wrapper, 'Auto').element as HTMLInputElement).checked).toBe(false)
+      wrapper.unmount()
+    })
+  })
+
+  describe('battery', () => {
+    const systemInfo: SystemInfoResponse = {
+      homeAssistant: { status: 'connected' },
+      go2rtc: { url: 'http://localhost:1984' },
+    }
+    const sensorInput = (wrapper: ReturnType<typeof mountView>) =>
+      wrapper.get('input[placeholder="sensor.tablet_battery_level"]')
+
+    beforeEach(() => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue(systemInfo)
+      vi.mocked(saveConfig)
+        .mockReset()
+        .mockImplementation(async (config) => config)
+    })
+
+    it('chooses when the header shows the battery', async () => {
+      const wrapper = mountView()
+      const label = wrapper.findAll('.row-label').find((el) => el.text() === 'Battery level')!
+      const group = wrapper.get(`[role="radiogroup"][aria-labelledby="${label.attributes('id')}"]`)
+      expect(group.findAll('label').map((el) => el.text())).toEqual([
+        'Off',
+        'Full screen',
+        'Always',
+      ])
+      const always = group
+        .findAll('label')
+        .find((el) => el.text() === 'Always')!
+        .get('input')
+      await always.setValue(true)
+      expect(useSettingsStore().batteryDisplay).toBe('always')
+      wrapper.unmount()
+    })
+
+    it('says when the browser cannot read the battery', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      expect(wrapper.text()).toContain("This browser can't read the battery")
+      wrapper.unmount()
+    })
+
+    it('adds a new sensor to the config and keeps the choice on this device', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await sensorInput(wrapper).setValue(' sensor.tablet_battery_level ')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(saveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ batteryEntities: ['sensor.tablet_battery_level'] }),
+      )
+      expect(useConfigStore().config.batteryEntities).toEqual(['sensor.tablet_battery_level'])
+      expect(useSettingsStore().batteryEntityId).toBe('sensor.tablet_battery_level')
+      wrapper.unmount()
+    })
+
+    it('does not save the config for a sensor it already lists', async () => {
+      vi.mocked(fetchConfig).mockResolvedValue(
+        appConfigSchema.parse({ batteryEntities: ['sensor.tablet_battery_level'] }),
+      )
+      const wrapper = mountView()
+      await flushPromises()
+      await sensorInput(wrapper).setValue('sensor.tablet_battery_level')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(saveConfig).not.toHaveBeenCalled()
+      expect(useSettingsStore().batteryEntityId).toBe('sensor.tablet_battery_level')
+      wrapper.unmount()
+    })
+
+    it('rejects an entity that is not a sensor', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await sensorInput(wrapper).setValue('lock.front_door')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.get('[role="alert"]').text()).toContain('Expected a sensor')
+      expect(saveConfig).not.toHaveBeenCalled()
+      expect(useSettingsStore().batteryEntityId).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('shows a failed save and keeps the old choice', async () => {
+      vi.mocked(saveConfig).mockRejectedValue(new Error('Server unreachable'))
+      const wrapper = mountView()
+      await flushPromises()
+      await sensorInput(wrapper).setValue('sensor.tablet_battery_level')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.get('[role="alert"]').text()).toBe('Server unreachable')
+      expect(useSettingsStore().batteryEntityId).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('clears the sensor when left blank', async () => {
+      useSettingsStore().setBatteryEntityId('sensor.tablet_battery_level')
+      const wrapper = mountView()
+      await flushPromises()
+      expect((sensorInput(wrapper).element as HTMLInputElement).value).toBe(
+        'sensor.tablet_battery_level',
+      )
+      await sensorInput(wrapper).setValue('')
+      await wrapper.get('form').trigger('submit')
+
+      expect(useSettingsStore().batteryEntityId).toBeUndefined()
+      expect(saveConfig).not.toHaveBeenCalled()
       wrapper.unmount()
     })
   })

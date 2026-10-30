@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, useId } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import type { HomeAssistantStatus } from '@shared/api.ts'
+import { entityIdSchema } from '@shared/config.ts'
 import AppIcon from '@/components/AppIcon.vue'
+import { useDeviceBattery } from '@/composables/useDeviceBattery'
 import { useSystemInfo } from '@/composables/useSystemInfo'
+import type { BatteryDisplay } from '@/lib/battery'
 import { SENSITIVITIES, sensitivityLabels } from '@/lib/sound-status'
 import { useConfigStore } from '@/stores/config'
 import type { StreamQualityPreference } from '@/lib/stream-quality'
@@ -23,6 +26,59 @@ const cameraLabelPrefix = useId()
 const stirringLabelPrefix = useId()
 const streamQualityLabelId = useId()
 const streamQualityName = useId()
+
+const batteryLabelId = useId()
+const batteryName = useId()
+const batterySensorInputId = useId()
+const batterySensorListId = useId()
+const batterySensorHelpId = useId()
+
+const batteryOptions: { value: BatteryDisplay; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'fullscreen', label: 'Full screen' },
+  { value: 'always', label: 'Always' },
+]
+
+const { reading: deviceBattery, unavailable: deviceBatteryUnavailable } = useDeviceBattery()
+const batterySensor = ref(settings.batteryEntityId ?? '')
+const batterySensorError = ref<string>()
+const savingBatterySensor = ref(false)
+const batterySensorChanged = computed(
+  () => batterySensor.value.trim() !== (settings.batteryEntityId ?? ''),
+)
+
+/**
+ * The server only reads entities the config lists, so a new sensor is added
+ * to `batteryEntities` first. That saves the whole config, which is fine for a
+ * one-off setup step; the choice of sensor itself stays on this device.
+ */
+async function saveBatterySensor() {
+  batterySensorError.value = undefined
+  const entityId = batterySensor.value.trim()
+  if (entityId === '') {
+    settings.setBatteryEntityId(undefined)
+    return
+  }
+  const parsed = entityIdSchema.safeParse(entityId)
+  if (!parsed.success) {
+    batterySensorError.value = parsed.error.issues[0]?.message ?? 'Invalid entity id'
+    return
+  }
+  const { config } = configStore
+  if (!config.batteryEntities.includes(entityId)) {
+    savingBatterySensor.value = true
+    try {
+      await configStore.save({ ...config, batteryEntities: [...config.batteryEntities, entityId] })
+    } catch (e) {
+      batterySensorError.value = e instanceof Error ? e.message : String(e)
+      return
+    } finally {
+      savingBatterySensor.value = false
+    }
+  }
+  batterySensor.value = entityId
+  settings.setBatteryEntityId(entityId)
+}
 
 const streamQualityOptions: { value: StreamQualityPreference; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -128,6 +184,69 @@ const homeAssistant = computed(() => {
             </label>
           </div>
         </div>
+        <div class="row stacked" role="radiogroup" :aria-labelledby="batteryLabelId">
+          <span :id="batteryLabelId" class="row-label">Battery level</span>
+          <span class="row-help">
+            Shows this device's battery next to the clock. Android hides its status bar in full
+            screen, so by default it shows only then.
+          </span>
+          <div class="segments">
+            <label v-for="option in batteryOptions" :key="option.value" class="segment">
+              <input
+                type="radio"
+                :name="batteryName"
+                :value="option.value"
+                :checked="settings.batteryDisplay === option.value"
+                @change="settings.setBatteryDisplay(option.value)"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </div>
+        <form class="row stacked" @submit.prevent="saveBatterySensor">
+          <label :for="batterySensorInputId" class="row-label">Home Assistant battery sensor</label>
+          <span :id="batterySensorHelpId" class="row-help">
+            <template v-if="deviceBattery">
+              This browser reads the battery itself ({{ deviceBattery.level }}% now), so the sensor
+              is only a fallback.
+            </template>
+            <template v-else-if="deviceBatteryUnavailable">
+              This browser can't read the battery (it needs Chrome or Edge over HTTPS), so the
+              monitor uses this sensor instead.
+            </template>
+            With the Home Assistant Companion app it is usually
+            <code>sensor.&lt;device&gt;_battery_level</code>. Leave it blank for none.
+          </span>
+          <div class="sensor-field">
+            <input
+              :id="batterySensorInputId"
+              v-model="batterySensor"
+              class="input"
+              type="text"
+              inputmode="url"
+              autocapitalize="off"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="sensor.tablet_battery_level"
+              :list="batterySensorListId"
+              :aria-describedby="batterySensorHelpId"
+              :aria-invalid="batterySensorError ? 'true' : undefined"
+            />
+            <datalist :id="batterySensorListId">
+              <option v-for="id in configStore.config.batteryEntities" :key="id" :value="id" />
+            </datalist>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="!configStore.loaded || savingBatterySensor || !batterySensorChanged"
+            >
+              Save
+            </button>
+          </div>
+          <p v-if="batterySensorError" class="field-error" role="alert">
+            {{ batterySensorError }}
+          </p>
+        </form>
       </section>
 
       <section class="card" aria-labelledby="alerts-heading">
@@ -477,6 +596,50 @@ const homeAssistant = computed(() => {
 .switch[aria-checked='true'] .switch-knob {
   background: var(--color-neutral-100);
   transform: translateX(24px);
+}
+
+.sensor-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  height: 48px;
+  padding: 0 20px;
+  font-size: 15px;
+  color: var(--color-text-strong);
+  caret-color: var(--color-accent-400);
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-pill);
+}
+
+.input::placeholder {
+  color: var(--color-neutral-600);
+}
+
+.input:hover {
+  border-color: var(--color-neutral-700);
+}
+
+.input:focus,
+.input:focus-visible {
+  border-color: var(--color-accent-500);
+  outline: none;
+}
+
+.field-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-accent-300);
+}
+
+code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 /* Wraps on narrow phones so a long camera name keeps room beside the control. */

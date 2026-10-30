@@ -46,6 +46,21 @@ describe('settings store', () => {
     expect(useSettingsStore().showStreamDetails).toBe(true)
   })
 
+  it('shows the battery in full screen by default and remembers the sensor', async () => {
+    const settings = useSettingsStore()
+    expect(settings.batteryDisplay).toBe('fullscreen')
+    expect(settings.batteryEntityId).toBeUndefined()
+
+    settings.setBatteryDisplay('always')
+    settings.setBatteryEntityId('sensor.tablet_battery_level')
+    await nextTick()
+
+    setActivePinia(createPinia())
+    const reloaded = useSettingsStore()
+    expect(reloaded.batteryDisplay).toBe('always')
+    expect(reloaded.batteryEntityId).toBe('sensor.tablet_battery_level')
+  })
+
   it('hides no cameras by default', () => {
     const settings = useSettingsStore()
     expect(settings.hiddenCameraIds).toEqual([])
@@ -87,6 +102,7 @@ describe('settings store', () => {
       feedLostAlerts: true,
       feedLostSound: true,
       streamQuality: 'auto',
+      batteryDisplay: 'fullscreen',
     })
 
     setActivePinia(createPinia())

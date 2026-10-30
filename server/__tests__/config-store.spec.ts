@@ -27,7 +27,12 @@ describe('ConfigStore', () => {
 
   it('returns the default config when no file exists', async () => {
     const store = new ConfigStore(dir)
-    expect(await store.load()).toEqual({ version: 1, cameras: [], layout: { mode: 'grid' } })
+    expect(await store.load()).toEqual({
+      version: 1,
+      cameras: [],
+      layout: { mode: 'grid' },
+      batteryEntities: [],
+    })
   })
 
   it('persists a saved config across instances', async () => {

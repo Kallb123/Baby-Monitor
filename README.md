@@ -45,6 +45,15 @@ monitor.
 - A full-screen button in the header hides the browser's own bars where the
   browser allows it. It isn't shown on iPhone Safari, which has no full-screen
   API; Add to Home Screen gives the same effect there.
+- Shows the device's battery level next to the clock while in full screen,
+  where Android hides its own status bar (Settings can show it always or never).
+  The percentage turns orange below 20% when not charging, which on a
+  wall-mounted tablet usually means the charger came out. Chrome and Edge,
+  including on Android, read the battery directly when the app is served over
+  HTTPS. Where the browser can't (plain HTTP, Safari, Firefox), set the
+  device's Home Assistant battery sensor in Settings, such as the Companion
+  app's `sensor.<device>_battery_level`; it then shows only the level, without
+  a charging state.
 - Works in portrait and landscape.
 - Installable on your home screen, with automatic screen wake lock while the
   app is visible on supported browsers.
@@ -277,8 +286,8 @@ Outside Compose, configure go2rtc's listeners in its own config to match;
 the Node server uses `GO2RTC_API_PORT` to derive its default connection URL but
 does not configure a separately running go2rtc process.
 
-Everything else (cameras, entities, layout) is edited in the app and persisted
-by the server. The settings page shows `HA_URL` and `GO2RTC_URL` read-only,
+Everything else (cameras, entities, layout, battery sensors) is edited in the
+app and persisted by the server. The settings page shows `HA_URL` and `GO2RTC_URL` read-only,
 with a live check of the Home Assistant connection, which helps when setting
 up `HA_TOKEN`.
 
