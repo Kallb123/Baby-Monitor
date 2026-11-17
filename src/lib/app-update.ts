@@ -1,5 +1,7 @@
 export type AppUpdateStatus =
+  | 'registering'
   | 'unsupported'
+  | 'insecure'
   | 'idle'
   | 'checking'
   | 'up-to-date'
@@ -17,15 +19,20 @@ export const UPDATE_CHECK_THROTTLE_MS = 60_000
 /** How long to wait for the new worker to take over before reloading by hand. */
 export const UPDATE_RELOAD_FALLBACK_MS = 10_000
 
+/** A stalled precache download must not leave a check running forever. */
+export const UPDATE_INSTALL_TIMEOUT_MS = 60_000
+
 export const appUpdateMessages: Record<AppUpdateStatus, string> = {
-  unsupported:
-    "Updates aren't available here: the app isn't installed with offline support (it needs HTTPS).",
+  registering: 'Starting…',
+  unsupported: "Updates aren't available in this browser.",
+  insecure: 'Updates need HTTPS. Open the app over a secure connection.',
   idle: 'Not checked yet.',
   checking: 'Checking for updates…',
   'up-to-date': 'Up to date',
   available: 'A new version is ready. Updating reloads this screen, so streams reconnect.',
   updating: 'Updating…',
-  'reload-needed': 'Updated in another window. Reload to use the new version.',
+  'reload-needed':
+    'Updated in another window. Reloading uses the new version, so streams reconnect.',
   error: "Couldn't check for updates. Check the connection and try again.",
 }
 

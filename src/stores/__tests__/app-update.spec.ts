@@ -1,9 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { UPDATE_CHECK_INTERVAL_MS, UPDATE_RELOAD_FALLBACK_MS } from '@/lib/app-update'
+import {
+  UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_INSTALL_TIMEOUT_MS,
+  UPDATE_RELOAD_FALLBACK_MS,
+} from '@/lib/app-update'
 
 type Options = {
+  onNeedReload?: () => void
   onNeedRefresh?: () => void
   onRegisteredSW?: (url: string, reg: ServiceWorkerRegistration | undefined) => void
   onRegisterError?: (error: unknown) => void
@@ -26,10 +31,11 @@ vi.mock('virtual:pwa-register', () => ({
 import { useAppUpdateStore } from '../app-update'
 
 class FakeWorker extends EventTarget {
-  state = 'installing'
+  state: string = 'installing'
 }
 
 type FakeRegistration = {
+  active: ServiceWorker | null
   waiting: ServiceWorker | null
   installing: FakeWorker | null
   update: Mock<() => Promise<void>>
@@ -45,6 +51,7 @@ function installFakeServiceWorker(controller: object | null = {}) {
 
 function makeRegistration(): FakeRegistration {
   return {
+    active: null,
     waiting: null,
     installing: null,
     update: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -57,6 +64,9 @@ describe('app update store', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    // Vitest runs with DEV on; the store skips registration there.
+    vi.stubEnv('DEV', false)
+    vi.stubGlobal('isSecureContext', true)
     setActivePinia(createPinia())
     pwa.options = undefined
     pwa.updateSW = vi.fn<(reload?: boolean) => Promise<void>>().mockResolvedValue(undefined)
@@ -69,6 +79,7 @@ describe('app update store', () => {
   afterEach(() => {
     useAppUpdateStore().stop()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     vi.useRealTimers()
     Reflect.deleteProperty(navigator, 'serviceWorker')
   })
@@ -88,11 +99,27 @@ describe('app update store', () => {
     expect(pwa.registerSW).not.toHaveBeenCalled()
   })
 
-  it('stays unsupported until a registration arrives, and registers only once', () => {
+  it('says updates need HTTPS in an insecure context', () => {
+    Reflect.deleteProperty(navigator, 'serviceWorker')
+    vi.stubGlobal('isSecureContext', false)
+    const store = useAppUpdateStore()
+    store.start()
+    expect(store.status).toBe('insecure')
+  })
+
+  it('is unsupported in dev without registering', () => {
+    vi.stubEnv('DEV', true)
+    const store = useAppUpdateStore()
+    store.start()
+    expect(store.status).toBe('unsupported')
+    expect(pwa.registerSW).not.toHaveBeenCalled()
+  })
+
+  it('is registering until a registration arrives, and registers only once', () => {
     const store = useAppUpdateStore()
     store.start()
     store.start()
-    expect(store.status).toBe('unsupported')
+    expect(store.status).toBe('registering')
     expect(pwa.registerSW).toHaveBeenCalledTimes(1)
 
     pwa.options?.onRegisteredSW?.('/sw.js', asRegistration(makeRegistration()))
@@ -106,6 +133,14 @@ describe('app update store', () => {
     pwa.options?.onRegisterError?.(new Error('insecure'))
     expect(store.status).toBe('unsupported')
     expect(warn).toHaveBeenCalled()
+  })
+
+  it('keeps an available update when registration reports an error later', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { store } = started()
+    pwa.options?.onNeedRefresh?.()
+    pwa.options?.onRegisterError?.(new Error('late'))
+    expect(store.status).toBe('available')
   })
 
   it('becomes available when the worker asks for a refresh', () => {
@@ -183,7 +218,8 @@ describe('app update store', () => {
   })
 
   it('applies the update through the worker and reloads if nothing else does', async () => {
-    const { store } = started()
+    const { store, reg } = started()
+    reg.waiting = {} as ServiceWorker
     pwa.options?.onNeedRefresh?.()
     await store.applyUpdate()
     expect(pwa.updateSW).toHaveBeenCalledWith(true)
@@ -204,7 +240,8 @@ describe('app update store', () => {
   })
 
   it('does not ask to reload for its own update', async () => {
-    const { store } = started()
+    const { store, reg } = started()
+    reg.waiting = {} as ServiceWorker
     await store.applyUpdate()
     container.dispatchEvent(new Event('controllerchange'))
     expect(store.status).toBe('updating')
@@ -217,10 +254,125 @@ describe('app update store', () => {
     expect(store.status).toBe('idle')
   })
 
-  it('stops listening after stop()', () => {
+  it('treats a controller change after a hard reload as an update', () => {
+    container = installFakeServiceWorker(null)
+    const reg = makeRegistration()
+    reg.active = {} as ServiceWorker
+    const { store } = started(reg)
+    container.dispatchEvent(new Event('controllerchange'))
+    expect(store.status).toBe('reload-needed')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('reloads when the library asks while this window is updating', async () => {
+    const { store, reg } = started()
+    reg.waiting = {} as ServiceWorker
+    await store.applyUpdate()
+    pwa.options?.onNeedReload?.()
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('never reloads by itself when the library asks and this window did not update', () => {
     const { store } = started()
+    pwa.options?.onNeedReload?.()
+    expect(store.status).toBe('reload-needed')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('gives up waiting for a stalled install and reports an error', async () => {
+    const { store, reg } = started()
+    const worker = new FakeWorker()
+    reg.update.mockImplementation(async () => {
+      reg.installing = worker
+    })
+    const check = store.checkForUpdates()
+    await vi.advanceTimersByTimeAsync(UPDATE_INSTALL_TIMEOUT_MS)
+    await check
+    expect(store.status).toBe('error')
+    // The listener is gone, so a late state change does nothing.
+    reg.waiting = worker as unknown as ServiceWorker
+    worker.dispatchEvent(new Event('statechange'))
+    expect(store.status).toBe('error')
+  })
+
+  it('reports up to date when the new worker turns redundant', async () => {
+    const { store, reg } = started()
+    const worker = new FakeWorker()
+    reg.update.mockImplementation(async () => {
+      reg.installing = worker
+    })
+    const check = store.checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    worker.state = 'redundant'
+    worker.dispatchEvent(new Event('statechange'))
+    await check
+    expect(store.status).toBe('up-to-date')
+  })
+
+  it('skips the hourly check while an update is available', async () => {
+    const { reg } = started()
+    pwa.options?.onNeedRefresh?.()
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(reg.update).not.toHaveBeenCalled()
+  })
+
+  it('stays available when a manual check fails but a worker is waiting', async () => {
+    const { store, reg } = started()
+    pwa.options?.onNeedRefresh?.()
+    reg.waiting = {} as ServiceWorker
+    reg.update.mockRejectedValue(new TypeError('offline'))
+    await store.checkForUpdates()
+    expect(store.status).toBe('available')
+  })
+
+  it('checks instead of updating when no worker is waiting', async () => {
+    const { store, reg } = started()
+    pwa.options?.onNeedRefresh?.()
+    await store.applyUpdate()
+    expect(reg.update).toHaveBeenCalled()
+    expect(pwa.updateSW).not.toHaveBeenCalled()
+    expect(store.status).toBe('up-to-date')
+    await vi.advanceTimersByTimeAsync(UPDATE_RELOAD_FALLBACK_MS)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('reports an error and clears the fallback when applying fails', async () => {
+    const { store, reg } = started()
+    reg.waiting = {} as ServiceWorker
+    pwa.updateSW?.mockRejectedValue(new Error('boom'))
+    await store.applyUpdate()
+    expect(store.status).toBe('error')
+    await vi.advanceTimersByTimeAsync(UPDATE_RELOAD_FALLBACK_MS)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('clears the fallback reload on stop()', async () => {
+    const { store, reg } = started()
+    reg.waiting = {} as ServiceWorker
+    await store.applyUpdate()
+    store.stop()
+    await vi.advanceTimersByTimeAsync(UPDATE_RELOAD_FALLBACK_MS)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('runs a Settings check requested before registration once it arrives', async () => {
+    const store = useAppUpdateStore()
+    store.start()
+    store.checkIfStale()
+    const reg = makeRegistration()
+    expect(reg.update).not.toHaveBeenCalled()
+    pwa.options?.onRegisteredSW?.('/sw.js', asRegistration(reg))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reg.update).toHaveBeenCalledTimes(1)
+    expect(store.status).toBe('up-to-date')
+  })
+
+  it('stops listening and checking after stop()', async () => {
+    const { store, reg } = started()
     store.stop()
     container.dispatchEvent(new Event('controllerchange'))
     expect(store.status).toBe('idle')
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS)
+    expect(reg.update).not.toHaveBeenCalled()
   })
 })

@@ -10,7 +10,9 @@ import {
 describe('appUpdateMessages', () => {
   it('has a non-empty message for every status', () => {
     const statuses: AppUpdateStatus[] = [
+      'registering',
       'unsupported',
+      'insecure',
       'idle',
       'checking',
       'up-to-date',
@@ -20,6 +22,17 @@ describe('appUpdateMessages', () => {
       'error',
     ]
     for (const status of statuses) expect(appUpdateMessages[status]).not.toBe('')
+  })
+})
+
+describe('appUpdateMessages wording', () => {
+  it('only mentions HTTPS for the insecure status', () => {
+    expect(appUpdateMessages.insecure).toContain('HTTPS')
+    expect(appUpdateMessages.unsupported).not.toContain('HTTPS')
+  })
+
+  it('warns that streams reconnect when a reload is needed', () => {
+    expect(appUpdateMessages['reload-needed']).toContain('streams reconnect')
   })
 })
 

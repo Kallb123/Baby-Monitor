@@ -122,7 +122,8 @@ button {
   white-space: nowrap;
 }
 
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled='true'] {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -132,11 +133,11 @@ button {
   color: var(--color-bg);
 }
 
-.btn-primary:not(:disabled):hover {
+.btn-primary:not(:disabled, [aria-disabled='true']):hover {
   background: var(--color-accent-500);
 }
 
-.btn-primary:not(:disabled):active {
+.btn-primary:not(:disabled, [aria-disabled='true']):active {
   background: var(--color-accent-400);
 }
 

@@ -96,9 +96,18 @@ onMounted(() => {
   appUpdate.checkIfStale()
 })
 
-const updateBusy = computed(
-  () => appUpdate.status === 'checking' || appUpdate.status === 'updating',
+// aria-disabled rather than disabled so keyboard focus stays on the button.
+const checkInert = computed(() =>
+  ['registering', 'checking', 'updating', 'reload-needed'].includes(appUpdate.status),
 )
+const checkUnavailable = computed(
+  () => appUpdate.status === 'unsupported' || appUpdate.status === 'insecure',
+)
+
+function checkForUpdates() {
+  if (checkInert.value) return
+  void appUpdate.checkForUpdates()
+}
 
 const haStatusLabels: Record<HomeAssistantStatus, string> = {
   connected: 'Connected',
@@ -391,13 +400,16 @@ const homeAssistant = computed(() => {
           </div>
         </dl>
         <div class="row stacked">
-          <p class="update-status" aria-live="polite">{{ appUpdate.message }}</p>
+          <p class="update-status" aria-live="polite" :aria-busy="appUpdate.status === 'checking'">
+            {{ appUpdate.message }}
+          </p>
           <div class="update-actions">
             <button
               type="button"
               class="btn btn-secondary"
-              :disabled="updateBusy || appUpdate.status === 'unsupported'"
-              @click="appUpdate.checkForUpdates()"
+              :disabled="checkUnavailable"
+              :aria-disabled="checkInert ? 'true' : undefined"
+              @click="checkForUpdates()"
             >
               <AppIcon name="refresh-cw" :size="18" />
               Check for updates

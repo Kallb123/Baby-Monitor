@@ -119,8 +119,10 @@ Data flow:
   shows the result in Settings: **Update now** applies it and reloads that
   window, falling back to `location.reload()` after 10 s. A window whose worker
   was swapped from elsewhere (another tab or the installed app) shows **Reload**
-  instead of reloading itself. Without a service worker (dev server, plain HTTP)
-  Settings says updates aren't available. Pure bits are in `src/lib/app-update.ts`.
+  instead of reloading itself: `registerSW` gets `onNeedReload` so its default
+  reload-on-controlling never fires unless this window tapped **Update now**.
+  Without a service worker (dev server, plain HTTP) Settings says updates aren't
+  available. Pure bits are in `src/lib/app-update.ts`.
 - **History** (`/history`, `HistoryView.vue`, opened from the header's clock
   icon): crying comes from HA's recorder through `GET /api/ha/history`
   (`HomeAssistantClient.getHistory`, converted by `server/cry-history.ts`), so
