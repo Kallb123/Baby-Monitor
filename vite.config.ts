@@ -20,9 +20,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       VitePWA({
-        // Let updates wait until all app windows close; never reload a live monitor.
+        // A new version waits until every app window closes; nothing reloads a live
+        // monitor by itself. The app registers the worker itself (src/main.ts) so
+        // Settings can check for and apply updates.
         registerType: 'prompt',
-        injectRegister: 'script',
+        injectRegister: false,
         includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
         manifest: {
           id: '/',

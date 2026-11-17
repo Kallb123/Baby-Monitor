@@ -108,7 +108,19 @@ Data flow:
   and each camera's Stirring sensitivity (Low, Medium or High), kept in
   `localStorage` by `useSettingsStore` (not on the server, for the same reason
   as the layout), plus read-only server settings and a live Home Assistant
-  check from `GET /api/system`.
+  check from `GET /api/system`, plus an App card with the version and update
+  controls (see App updates).
+- **App updates**: the service worker waits for every app window to close
+  (`skipWaiting` and `clientsClaim` stay off), so a live monitor is never
+  reloaded by surprise. `main.ts` starts `useAppUpdateStore`
+  (`src/stores/app-update.ts`), which registers the worker itself
+  (`injectRegister: false`) through `virtual:pwa-register`, checks for a new
+  version hourly and whenever Settings opens (throttled to once a minute), and
+  shows the result in Settings: **Update now** applies it and reloads that
+  window, falling back to `location.reload()` after 10 s. A window whose worker
+  was swapped from elsewhere (another tab or the installed app) shows **Reload**
+  instead of reloading itself. Without a service worker (dev server, plain HTTP)
+  Settings says updates aren't available. Pure bits are in `src/lib/app-update.ts`.
 - **History** (`/history`, `HistoryView.vue`, opened from the header's clock
   icon): crying comes from HA's recorder through `GET /api/ha/history`
   (`HomeAssistantClient.getHistory`, converted by `server/cry-history.ts`), so

@@ -9,12 +9,14 @@ import { useDeviceBattery } from '@/composables/useDeviceBattery'
 import { useSystemInfo } from '@/composables/useSystemInfo'
 import type { BatteryDisplay } from '@/lib/battery'
 import { SENSITIVITIES, sensitivityLabels } from '@/lib/sound-status'
+import { useAppUpdateStore } from '@/stores/app-update'
 import { useConfigStore } from '@/stores/config'
 import type { StreamQualityPreference } from '@/lib/stream-quality'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
 const configStore = useConfigStore()
+const appUpdate = useAppUpdateStore()
 const { info, error } = useSystemInfo()
 const appVersion = __APP_VERSION__
 const decibelsLabelId = useId()
@@ -91,7 +93,12 @@ const streamQualityOptions: { value: StreamQualityPreference; label: string }[] 
 // monitor has loaded the camera list.
 onMounted(() => {
   if (!configStore.loaded) void configStore.load()
+  appUpdate.checkIfStale()
 })
+
+const updateBusy = computed(
+  () => appUpdate.status === 'checking' || appUpdate.status === 'updating',
+)
 
 const haStatusLabels: Record<HomeAssistantStatus, string> = {
   connected: 'Connected',
@@ -371,6 +378,51 @@ const homeAssistant = computed(() => {
         </div>
       </section>
 
+      <section class="card" aria-labelledby="app-heading">
+        <h2 id="app-heading" class="card-title">App</h2>
+        <p class="card-note">
+          A new version never loads by itself, so a running monitor isn't interrupted.
+        </p>
+
+        <dl class="facts">
+          <div class="row fact">
+            <dt class="row-label">Version</dt>
+            <dd class="row-value url">v{{ appVersion }}</dd>
+          </div>
+        </dl>
+        <div class="row stacked">
+          <p class="update-status" aria-live="polite">{{ appUpdate.message }}</p>
+          <div class="update-actions">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              :disabled="updateBusy || appUpdate.status === 'unsupported'"
+              @click="appUpdate.checkForUpdates()"
+            >
+              <AppIcon name="refresh-cw" :size="18" />
+              Check for updates
+            </button>
+            <button
+              v-if="appUpdate.status === 'available' || appUpdate.status === 'updating'"
+              type="button"
+              class="btn btn-primary"
+              :disabled="appUpdate.status === 'updating'"
+              @click="appUpdate.applyUpdate()"
+            >
+              Update now
+            </button>
+            <button
+              v-if="appUpdate.status === 'reload-needed'"
+              type="button"
+              class="btn btn-primary"
+              @click="appUpdate.reload()"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="system-heading">
         <h2 id="system-heading" class="card-title">System</h2>
         <p class="card-note">Set on the server with environment variables. Read-only here.</p>
@@ -398,8 +450,6 @@ const homeAssistant = computed(() => {
         </dl>
       </section>
     </main>
-
-    <footer class="settings-footer">Baby Monitor v{{ appVersion }}</footer>
   </div>
 </template>
 
@@ -447,15 +497,8 @@ const homeAssistant = computed(() => {
   gap: 16px;
   max-width: 640px;
   margin: 0 auto;
-  padding: 12px calc(20px + env(safe-area-inset-right)) 12px calc(20px + env(safe-area-inset-left));
-}
-
-.settings-footer {
-  padding: 4px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))
+  padding: 12px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom))
     calc(20px + env(safe-area-inset-left));
-  font-size: 13px;
-  text-align: center;
-  color: var(--color-text-muted);
 }
 
 .card {
@@ -645,6 +688,18 @@ const homeAssistant = computed(() => {
   margin: 0;
   font-size: 13px;
   color: var(--color-accent-300);
+}
+
+.update-status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 code {

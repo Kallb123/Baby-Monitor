@@ -29,13 +29,17 @@ describe('SettingsView', () => {
     vi.mocked(fetchConfig).mockResolvedValue(configWith())
   })
 
-  it('shows the app version in the footer', () => {
+  it('shows the app version and update status in the App card', () => {
     vi.mocked(fetchSystemInfo).mockResolvedValue({
       homeAssistant: { status: 'unconfigured', message: 'HA_URL and HA_TOKEN are not set' },
       go2rtc: { url: 'http://localhost:1984' },
     })
     const wrapper = mountView()
-    expect(wrapper.get('footer').text()).toBe(`Baby Monitor v${__APP_VERSION__}`)
+    const card = wrapper.get('[aria-labelledby="app-heading"]')
+    expect(card.text()).toContain(`v${__APP_VERSION__}`)
+    expect(wrapper.find('footer').exists()).toBe(false)
+    expect(card.get('[aria-live="polite"]').text()).not.toBe('')
+    wrapper.unmount()
   })
 
   it('toggles the decibel readout', async () => {
