@@ -207,7 +207,10 @@ awake.
 Production builds cache the app shell, including fonts and the settings page.
 Camera streams, configuration and sensor readings still require the server and
 are never cached by the service worker. App updates wait until all app windows
-and tabs are closed, so an update does not reload a running monitor.
+and tabs are closed, so an update does not reload a running monitor. To update a
+screen that never closes (a wall-mounted tablet), open **Settings → App** and
+tap **Update now**; the app also checks for a new version every hour and when
+Settings opens.
 
 To check installation locally, run `npm run preview` and visit
 `http://localhost:3000`. The service worker is disabled in the Vite dev server.

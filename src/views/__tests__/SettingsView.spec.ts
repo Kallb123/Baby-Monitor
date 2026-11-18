@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SystemInfoResponse } from '@shared/api.ts'
 import { appConfigSchema, type AppConfig } from '@shared/config.ts'
 import { fetchConfig, fetchSystemInfo, saveConfig } from '@/api'
+import { useAppUpdateStore } from '@/stores/app-update'
 import { useConfigStore } from '@/stores/config'
 import { useSettingsStore } from '@/stores/settings'
 import SettingsView from '../SettingsView.vue'
@@ -29,13 +30,68 @@ describe('SettingsView', () => {
     vi.mocked(fetchConfig).mockResolvedValue(configWith())
   })
 
-  it('shows the app version in the footer', () => {
+  it('shows the app version and update status in the App card', () => {
     vi.mocked(fetchSystemInfo).mockResolvedValue({
       homeAssistant: { status: 'unconfigured', message: 'HA_URL and HA_TOKEN are not set' },
       go2rtc: { url: 'http://localhost:1984' },
     })
     const wrapper = mountView()
-    expect(wrapper.get('footer').text()).toBe(`Baby Monitor v${__APP_VERSION__}`)
+    const card = wrapper.get('[aria-labelledby="app-heading"]')
+    expect(card.text()).toContain(`v${__APP_VERSION__}`)
+    expect(wrapper.find('footer').exists()).toBe(false)
+    expect(card.get('[aria-live="polite"]').text()).not.toBe('')
+    wrapper.unmount()
+  })
+
+  describe('app update controls', () => {
+    beforeEach(() => {
+      vi.mocked(fetchSystemInfo).mockResolvedValue({
+        homeAssistant: { status: 'unconfigured' },
+        go2rtc: { url: 'http://localhost:1984' },
+      })
+    })
+
+    const buttons = (wrapper: ReturnType<typeof mountView>) =>
+      wrapper.get('[aria-labelledby="app-heading"]').findAll('button')
+    const button = (wrapper: ReturnType<typeof mountView>, label: string) =>
+      buttons(wrapper).find((el) => el.text() === label)
+
+    it('offers Update now when an update is available', async () => {
+      useAppUpdateStore().status = 'available'
+      const wrapper = mountView()
+      expect(button(wrapper, 'Update now')?.exists()).toBe(true)
+      expect(button(wrapper, 'Reload')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('offers Reload, and an inert Check, when another window updated', () => {
+      useAppUpdateStore().status = 'reload-needed'
+      const wrapper = mountView()
+      expect(button(wrapper, 'Reload')?.exists()).toBe(true)
+      expect(button(wrapper, 'Check for updates')?.attributes('aria-disabled')).toBe('true')
+      wrapper.unmount()
+    })
+
+    it('disables Check when updates are unsupported', () => {
+      useAppUpdateStore().status = 'unsupported'
+      const wrapper = mountView()
+      expect(button(wrapper, 'Check for updates')?.attributes('disabled')).toBeDefined()
+      wrapper.unmount()
+    })
+
+    it('keeps Check focusable but inert while checking', async () => {
+      const store = useAppUpdateStore()
+      const check = vi.spyOn(store, 'checkForUpdates')
+      store.status = 'checking'
+      const wrapper = mountView()
+      const check_ = button(wrapper, 'Check for updates')!
+      expect(check_.attributes('disabled')).toBeUndefined()
+      expect(check_.attributes('aria-disabled')).toBe('true')
+      expect(wrapper.get('.update-status').attributes('aria-busy')).toBe('true')
+      await check_.trigger('click')
+      expect(check).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
   })
 
   it('toggles the decibel readout', async () => {

@@ -11,11 +11,14 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { unlockAudioOnFirstGesture } from './lib/audio-context'
 import router from './router'
+import { useAppUpdateStore } from './stores/app-update'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+
+useAppUpdateStore().start()
 
 unlockAudioOnFirstGesture()
 
