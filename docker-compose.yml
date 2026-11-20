@@ -67,7 +67,7 @@ services:
 
   # Pulls each camera's RTSP feed and serves it to browsers over WebRTC.
   go2rtc:
-    image: alexxit/go2rtc:1.9.14
+    image: alexxit/go2rtc:1.9.15
     network_mode: host
     restart: unless-stopped
     command: ['go2rtc', '-config', '/config/go2rtc.yaml', '-config', '/etc/go2rtc/base.yaml']
@@ -91,7 +91,7 @@ services:
   # (port 8654 by default). localhost is resolved by go2rtc, not the browser.
   demo-camera:
     profiles: [demo]
-    image: alexxit/go2rtc:1.9.14
+    image: alexxit/go2rtc:1.9.15
     network_mode: host
     restart: unless-stopped
     command: ['go2rtc', '-config', '/etc/go2rtc/demo.yaml']
