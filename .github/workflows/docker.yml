@@ -32,7 +32,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # GHCR names must be lowercase; the repo owner is Kallb123.
           images: ghcr.io/kallb123/baby-monitor
