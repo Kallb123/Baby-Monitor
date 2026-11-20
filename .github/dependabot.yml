@@ -1,0 +1,77 @@
+# Keeps npm packages, GitHub Actions and Docker images up to date.
+# Minor and patch bumps are grouped into one PR per ecosystem each week so the
+# queue stays short; major bumps get their own PR because they may need code
+# changes. CI runs on every Dependabot PR (the Claude review skips itself, as
+# Dependabot PRs don't get repository secrets).
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Wait a few days before proposing a fresh release, so a compromised or
+    # broken publish is usually caught and pulled first.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+      tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # These track the Node major the app runs on (Dockerfile, CI and
+      # `engines`). Moving Node is a deliberate change across all of them.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@tsconfig/node*'
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  # Base images in the Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: build
+    ignore:
+      # Same reason as @types/node above: the Node major moves with CI,
+      # `engines` and the type packages, not on its own.
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
+  # Pinned images in docker-compose.yml (go2rtc). Floating tags such as
+  # home-assistant:stable and the app's own image are left alone.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: build
